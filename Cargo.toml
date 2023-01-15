@@ -1,2 +1,2 @@
 [workspace]
-members = [ "cli", "af-generator" ]
+members = [ "lib", "cli", "cli-iccma", "af-generator" ]

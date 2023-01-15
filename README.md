@@ -1,11 +1,21 @@
 # Dynamic Argumentation Solved using ASP
 
+**Note**: Highly **WIP**
+
 An ASP solver implementation using [Potassco](https://potassco.org/)'s [clingo](https://potassco.org/clingo/)
 as a backend with a focus on dynamic scenarios.
 
-## [cli](./cli)
+## [lib](./lib)
 
 The main part of this. **TBD**
+
+## [cli](./cli)
+
+CLI frontend for the library. **TBD**
+
+## [cli-iccma](./cli-iccma)
+
+ICCMA-conformant CLI frontend. **TBD**
 
 ## [af-generator](./af-generator)
 
