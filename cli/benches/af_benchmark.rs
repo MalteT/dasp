@@ -1,6 +1,8 @@
 use criterion::{criterion_group, criterion_main, Criterion};
 use tempfile::NamedTempFile;
 
+// TODO: Currently broken
+
 use std::{
     fs::File,
     io::{BufReader, BufWriter},

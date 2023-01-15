@@ -217,18 +217,16 @@ version = "0.0.0"
 dependencies = [
  "assert_cmd",
  "clap 4.0.32",
- "clingo",
  "criterion",
  "fallible-iterator",
  "lazy_static",
+ "lib",
  "log",
- "logos",
  "lzma-rs",
  "pretty_assertions",
  "pretty_env_logger",
  "rexpect",
  "tempfile",
- "thiserror",
 ]
 
 [[package]]
@@ -609,6 +607,14 @@ checksum = "e2abad23fbc42b3700f2f279844dc832adb2b2eb069b2df918f455c4e18cc646"
 [[package]]
 name = "lib"
 version = "0.1.0"
+dependencies = [
+ "clingo",
+ "fallible-iterator",
+ "log",
+ "logos",
+ "pretty_assertions",
+ "thiserror",
+]
 
 [[package]]
 name = "libc"

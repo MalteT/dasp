@@ -1,37 +1,29 @@
 //! Dynamic Argumentation Solved using ASP
-
-use crate::framework::{af::semantics, GenericExtension, AF};
 use args::{Args, CliTask};
 use clap::Parser;
-use context::Context;
 use fallible_iterator::FallibleIterator;
-use framework::af::semantics::Program;
+use lib::{
+    framework::{
+        af::{
+            semantics::{self, Program},
+            AF,
+        },
+        GenericExtension,
+    },
+    Error, Result,
+};
+
+use crate::context::Context;
 
 mod args;
 mod context;
-mod error;
-mod framework;
-
-pub use error::{Error, Result};
 
 pub enum Dynamics {
     No,
     Yes,
 }
 
-/// Read updates from the standard input and provide them line by line.
-#[deprecated]
-pub fn read_updates() -> impl FallibleIterator<Item = String, Error = Error> {
-    let lines = ::std::io::stdin()
-        .lines()
-        .inspect(|line| log::trace!("Found line: {line:?}"))
-        .map(|res| res.map_err(Error::from));
-    fallible_iterator::convert(lines)
-        .map(|line| Ok(line.trim().to_owned()))
-        .take_while(|line| Ok(!line.is_empty()))
-}
-
-fn main() -> Result<()> {
+fn main() -> Result {
     pretty_env_logger::init();
 
     let args = Args::parse();
@@ -94,7 +86,7 @@ fn main() -> Result<()> {
     }
 }
 
-fn run_task_enumerate_extensions<P: Program>(args: &Args, dynamics: Dynamics) -> Result<(), Error> {
+fn run_task_enumerate_extensions<P: Program>(args: &Args, dynamics: Dynamics) -> Result {
     let mut ctx = Context::<AF<P>>::new(args)?;
     ctx.enumerate_extensions()?.by_ref().for_each(|ext| {
         println!("{}", ext.format());
@@ -114,7 +106,7 @@ fn run_task_enumerate_extensions<P: Program>(args: &Args, dynamics: Dynamics) ->
     Ok(())
 }
 
-fn run_task_count_extensions<P: Program>(args: &Args, dynamics: Dynamics) -> Result<()> {
+fn run_task_count_extensions<P: Program>(args: &Args, dynamics: Dynamics) -> Result {
     let mut ctx = Context::<AF<P>>::new(args)?;
     println!("{}", ctx.count_extensions()?);
     if matches!(dynamics, Dynamics::Yes) {
@@ -127,7 +119,7 @@ fn run_task_count_extensions<P: Program>(args: &Args, dynamics: Dynamics) -> Res
     Ok(())
 }
 
-fn run_task_sample_extension<P: Program>(args: &Args, dynamics: Dynamics) -> Result<()> {
+fn run_task_sample_extension<P: Program>(args: &Args, dynamics: Dynamics) -> Result {
     let mut ctx = Context::<AF<P>>::new(args)?;
     match ctx.sample_extension()? {
         Some(ext) => println!("{}", ext.format()),

@@ -3,9 +3,8 @@ use thiserror::Error;
 use crate::{Error, Result};
 
 pub mod af;
-pub mod iter_guard;
+mod iter_guard;
 
-pub use af::AF;
 use fallible_iterator::FallibleIterator;
 pub use iter_guard::IterGuard;
 

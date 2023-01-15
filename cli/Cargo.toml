@@ -10,13 +10,11 @@ app = true
 
 [dependencies]
 clap = { version = "4.0.11", features = ["derive", "cargo"] }
-clingo = { version = "0.7.2", features = ["derive"] }
+lib = { path = "../lib" }
 fallible-iterator = "0.2.0"
 lazy_static = "1.4.0"
 log = "0.4.17"
-logos = "0.12.1"
 pretty_env_logger = "0.4.0"
-thiserror = "1.0.37"
 
 [dev-dependencies]
 assert_cmd = { version = "2.0.5", features = ["color-auto"] }
@@ -29,7 +27,6 @@ tempfile = "3.3.0"
 [[bench]]
 name = "af_benchmark"
 harness = false
-
 
 [[bin]]
 name = "cli"
