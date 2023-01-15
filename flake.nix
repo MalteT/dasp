@@ -69,6 +69,12 @@
         cli.overrides.fixClingoLinking = {
           buildInputs = [(clingoFixed common.pkgs)];
         };
+        lib.depsOverrides.fixClingoSysBuild = {
+          CLINGO_LIBRARY_PATH = "${clingoFixed common.pkgs}/lib";
+        };
+        lib.overrides.fixClingoLinking = {
+          buildInputs = [(clingoFixed common.pkgs)];
+        };
       };
     })
     // {
