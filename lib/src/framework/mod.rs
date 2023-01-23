@@ -45,8 +45,8 @@ where
     type Extension: GenericExtension;
     /// Iterator over extensions.
     type ExtensionIter: FallibleIterator<Item = Self::Extension, Error = Error>;
-    /// Initialize the framework with the initial file content.
-    fn init(initial_file: &str) -> Result<Self>;
+    /// Initialize the framework with the raw initial file content.
+    fn new(input: &str) -> Result<Self>;
     /// Enumerate all extensions.
     ///
     /// All other extension methods are derived, but may be overriden if necessary.

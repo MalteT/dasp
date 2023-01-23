@@ -1,6 +1,6 @@
 use crate::{framework::ParserError, Result};
 
-use super::{symbols, ArgID};
+use super::{symbols, ArgumentID};
 
 pub mod apx;
 mod apxm;
@@ -32,13 +32,13 @@ pub fn parse_apx_tgf(input: &str) -> ParserResult<(Vec<symbols::Arg>, Vec<symbol
 
 #[derive(Debug)]
 pub struct RawArgument {
-    id: ArgID,
+    id: ArgumentID,
 }
 
 #[derive(Debug)]
 pub struct RawAttack {
-    from: ArgID,
-    to: ArgID,
+    from: ArgumentID,
+    to: ArgumentID,
 }
 
 fn expect<'l, T>(lex: &mut logos::Lexer<'l, T>, expected: T) -> ParserResult<T>

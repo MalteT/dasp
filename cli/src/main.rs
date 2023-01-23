@@ -6,7 +6,7 @@ use lib::{
     framework::{
         af::{
             semantics::{self, Program},
-            AF,
+            ArgumentationFramework,
         },
         GenericExtension,
     },
@@ -87,7 +87,7 @@ fn main() -> Result {
 }
 
 fn run_task_enumerate_extensions<P: Program>(args: &Args, dynamics: Dynamics) -> Result {
-    let mut ctx = Context::<AF<P>>::new(args)?;
+    let mut ctx = Context::<ArgumentationFramework<P>>::new(args)?;
     ctx.enumerate_extensions()?.by_ref().for_each(|ext| {
         println!("{}", ext.format());
         Ok(())
@@ -107,7 +107,7 @@ fn run_task_enumerate_extensions<P: Program>(args: &Args, dynamics: Dynamics) ->
 }
 
 fn run_task_count_extensions<P: Program>(args: &Args, dynamics: Dynamics) -> Result {
-    let mut ctx = Context::<AF<P>>::new(args)?;
+    let mut ctx = Context::<ArgumentationFramework<P>>::new(args)?;
     println!("{}", ctx.count_extensions()?);
     if matches!(dynamics, Dynamics::Yes) {
         let mut update_iter = args.update_file().lines()?;
@@ -120,7 +120,7 @@ fn run_task_count_extensions<P: Program>(args: &Args, dynamics: Dynamics) -> Res
 }
 
 fn run_task_sample_extension<P: Program>(args: &Args, dynamics: Dynamics) -> Result {
-    let mut ctx = Context::<AF<P>>::new(args)?;
+    let mut ctx = Context::<ArgumentationFramework<P>>::new(args)?;
     match ctx.sample_extension()? {
         Some(ext) => println!("{}", ext.format()),
         None => println!("NO"),

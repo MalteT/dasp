@@ -19,7 +19,7 @@ impl<F: Framework> Context<F> {
         );
         let content = args.file_content()?.unwrap();
         Ok(Context {
-            framework: F::init(&content)?,
+            framework: F::new(&content)?,
         })
     }
 

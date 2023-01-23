@@ -1,20 +1,20 @@
 use clingo::{ClingoError, Symbol, ToSymbol};
 
-use super::ArgID;
+use super::ArgumentID;
 
-#[derive(Debug, Clone, ToSymbol, PartialEq, Eq)]
+#[derive(Debug, Clone, ToSymbol, PartialEq, Eq, Hash)]
 pub struct Arg {
-    pub id: ArgID,
+    pub id: ArgumentID,
 }
 
 #[derive(Debug, Clone, ToSymbol, PartialEq, Eq)]
 pub struct Att {
-    pub from: ArgID,
-    pub to: ArgID,
+    pub from: ArgumentID,
+    pub to: ArgumentID,
 }
 
-impl From<ArgID> for Arg {
-    fn from(id: ArgID) -> Self {
+impl From<ArgumentID> for Arg {
+    fn from(id: ArgumentID) -> Self {
         Self { id }
     }
 }

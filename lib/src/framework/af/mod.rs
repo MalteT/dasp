@@ -12,13 +12,38 @@ use self::{
 
 use super::{Framework, GenericExtension, IterGuard};
 
-pub type ArgID = String;
+pub type ArgumentID = String;
 
 mod parser;
 pub mod semantics;
 mod symbols;
 
-pub struct AF<P: Program> {
+/// Dung's Argumentation Framework
+///
+/// A simple graph with arguments (vertices) and attacks (edges).
+///
+/// # Example
+/// ```
+/// use fallible_iterator::FallibleIterator;
+/// use lib::{framework::af::semantics, ArgumentationFramework, Framework};
+/// # use std::collections::HashSet;
+///
+/// let mut af = ArgumentationFramework::<semantics::Admissible>::new(
+///     r#"
+///         arg(1).
+///         arg(2).
+///         att(1,2).
+///     "#,
+/// )
+/// .expect("Initializing AF");
+///
+/// let extensions = af
+///     .enumerate_extensions()
+///     .expect("Enumerating extensions")
+///     .by_ref()
+///     .collect::<HashSet<_>>();
+/// ```
+pub struct ArgumentationFramework<P: Program> {
     pub args: Vec<symbols::Arg>,
     pub attacks: Vec<symbols::Att>,
     clingo_ctl: Option<::clingo::Control>,
@@ -38,11 +63,12 @@ pub struct ExtensionIter {
     handle: ::clingo::SolveHandle,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Extension {
     atoms: Vec<symbols::Arg>,
 }
 
-impl<P: Program> AF<P> {
+impl<P: Program> ArgumentationFramework<P> {
     /// Apply the given patch to the argumentation framework.
     fn apply_patch(&mut self, patch: Patch) {
         match patch {
@@ -100,7 +126,7 @@ fn initialize_clingo_backend<P: Program>(
     Ok(ctl)
 }
 
-impl<P: Program> Framework for AF<P> {
+impl<P: Program> Framework for ArgumentationFramework<P> {
     type Extension = Extension;
     type ExtensionIter = ExtensionIter;
 
@@ -110,14 +136,14 @@ impl<P: Program> Framework for AF<P> {
         Ok(IterGuard::new(self, ExtensionIter { handle }))
     }
 
-    fn init(initial_file: &str) -> Result<Self> {
-        let (args, attacks) = parse_apx_tgf(initial_file)?;
+    fn new(input: &str) -> Result<Self> {
+        let (args, attacks) = parse_apx_tgf(input)?;
         let clingo_ctl = initialize_clingo_backend::<P>(&args, &attacks)?;
-        Ok(AF {
+        Ok(ArgumentationFramework {
             args,
             attacks,
             _p: PhantomData,
-            _initial_file: initial_file.to_owned(),
+            _initial_file: input.to_owned(),
             clingo_ctl: Some(clingo_ctl),
         })
     }
