@@ -1,33 +1,19 @@
 use crate::{framework::ParserError, Result};
 
-use super::{symbols, ArgumentID};
+use super::{symbols, ArgumentID, Patch};
 
-pub mod apx;
+mod apx;
 mod apxm;
 mod tgf;
-pub mod tgfm;
-
+mod tgfm;
 type ParserResult<T> = Result<T, ParserError>;
-
-#[macro_export]
-macro_rules! arg {
-    ($name:literal) => {
-        symbols::Arg { id: $name.into() }
-    };
-}
-
-#[macro_export]
-macro_rules! att {
-    ($from:literal, $to:literal) => {
-        symbols::Att {
-            from: $from.into(),
-            to: $to.into(),
-        }
-    };
-}
 
 pub fn parse_apx_tgf(input: &str) -> ParserResult<(Vec<symbols::Arg>, Vec<symbols::Att>)> {
     apx::parse_file(input).or_else(|_| tgf::parse_file(input))
+}
+
+pub fn parse_apxm_tgfm_patch_line(input: &str) -> ParserResult<Vec<Patch>> {
+    apxm::parse_line(input).or_else(|_| tgfm::parse_line(input))
 }
 
 #[derive(Debug)]
@@ -41,6 +27,7 @@ pub struct RawAttack {
     to: ArgumentID,
 }
 
+/// Expect the given Token and fail if it's not present
 fn expect<'l, T>(lex: &mut logos::Lexer<'l, T>, expected: T) -> ParserResult<T>
 where
     T: logos::Logos<'l, Source = str> + std::cmp::PartialEq + std::fmt::Debug + 'static,
@@ -62,6 +49,8 @@ where
 
 #[cfg(test)]
 mod tests {
+    use crate::macros::{arg, att};
+
     use super::*;
     use pretty_assertions::assert_eq;
 

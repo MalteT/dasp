@@ -2,7 +2,7 @@ use clingo::{ClingoError, Symbol, ToSymbol};
 
 use super::ArgumentID;
 
-#[derive(Debug, Clone, ToSymbol, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, ToSymbol, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Arg {
     pub id: ArgumentID,
 }

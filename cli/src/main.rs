@@ -3,14 +3,9 @@ use args::{Args, CliTask};
 use clap::Parser;
 use fallible_iterator::FallibleIterator;
 use lib::{
-    framework::{
-        af::{
-            semantics::{self, Program},
-            ArgumentationFramework,
-        },
-        GenericExtension,
-    },
-    Error, Result,
+    argumentation_framework::{semantics::ArgumentationFrameworkSemantic, ArgumentationFramework},
+    framework::GenericExtension,
+    semantics, Error, Result,
 };
 
 use crate::context::Context;
@@ -86,7 +81,10 @@ fn main() -> Result {
     }
 }
 
-fn run_task_enumerate_extensions<P: Program>(args: &Args, dynamics: Dynamics) -> Result {
+fn run_task_enumerate_extensions<P: ArgumentationFrameworkSemantic>(
+    args: &Args,
+    dynamics: Dynamics,
+) -> Result {
     let mut ctx = Context::<ArgumentationFramework<P>>::new(args)?;
     ctx.enumerate_extensions()?.by_ref().for_each(|ext| {
         println!("{}", ext.format());
@@ -106,7 +104,10 @@ fn run_task_enumerate_extensions<P: Program>(args: &Args, dynamics: Dynamics) ->
     Ok(())
 }
 
-fn run_task_count_extensions<P: Program>(args: &Args, dynamics: Dynamics) -> Result {
+fn run_task_count_extensions<P: ArgumentationFrameworkSemantic>(
+    args: &Args,
+    dynamics: Dynamics,
+) -> Result {
     let mut ctx = Context::<ArgumentationFramework<P>>::new(args)?;
     println!("{}", ctx.count_extensions()?);
     if matches!(dynamics, Dynamics::Yes) {
@@ -119,7 +120,10 @@ fn run_task_count_extensions<P: Program>(args: &Args, dynamics: Dynamics) -> Res
     Ok(())
 }
 
-fn run_task_sample_extension<P: Program>(args: &Args, dynamics: Dynamics) -> Result {
+fn run_task_sample_extension<P: ArgumentationFrameworkSemantic>(
+    args: &Args,
+    dynamics: Dynamics,
+) -> Result {
     let mut ctx = Context::<ArgumentationFramework<P>>::new(args)?;
     match ctx.sample_extension()? {
         Some(ext) => println!("{}", ext.format()),

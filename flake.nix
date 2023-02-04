@@ -48,6 +48,7 @@
             cargo-flamegraph
             hyperfine
             nil
+            diff-so-fancy
             inputs.dev.packages.x86_64-linux.mdpls
             (clingoFixed common.pkgs)
             (bench common.pkgs)

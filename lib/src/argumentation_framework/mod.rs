@@ -1,22 +1,24 @@
-//! Solver for Argumentation Frameworks.
-use std::marker::PhantomData;
+//! Solver for Dung's Argumentation Frameworks.
+use std::{collections::BTreeSet, marker::PhantomData};
 
 use crate::{Error, Result};
 use clingo::{FactBase, Part, ShowType, SolveMode};
 use fallible_iterator::FallibleIterator;
 
-use self::{
-    parser::{parse_apx_tgf, tgfm},
-    semantics::Program,
-};
+use self::{parser::parse_apx_tgf, semantics::ArgumentationFrameworkSemantic};
 
-use super::{Framework, GenericExtension, IterGuard};
+use crate::{
+    framework::{GenericExtension, IterGuard},
+    Framework,
+};
 
 pub type ArgumentID = String;
 
 mod parser;
 pub mod semantics;
-mod symbols;
+pub mod symbols;
+#[cfg(test)]
+mod tests;
 
 /// Dung's Argumentation Framework
 ///
@@ -25,8 +27,8 @@ mod symbols;
 /// # Example
 /// ```
 /// use fallible_iterator::FallibleIterator;
-/// use lib::{framework::af::semantics, ArgumentationFramework, Framework};
-/// # use std::collections::HashSet;
+/// use lib::{semantics, argumentation_framework::ArgumentationFramework, Framework};
+/// # use std::collections::BTreeSet;
 ///
 /// let mut af = ArgumentationFramework::<semantics::Admissible>::new(
 ///     r#"
@@ -41,34 +43,97 @@ mod symbols;
 ///     .enumerate_extensions()
 ///     .expect("Enumerating extensions")
 ///     .by_ref()
-///     .collect::<HashSet<_>>();
+///     .collect::<BTreeSet<_>>();
 /// ```
-pub struct ArgumentationFramework<P: Program> {
+pub struct ArgumentationFramework<S: ArgumentationFrameworkSemantic> {
     pub args: Vec<symbols::Arg>,
     pub attacks: Vec<symbols::Att>,
     clingo_ctl: Option<::clingo::Control>,
     _initial_file: String,
-    _p: PhantomData<P>,
+    _semantics: PhantomData<S>,
 }
 
+/// An update to the [`ArgumentationFramework`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Patch {
+    /// Add an additional argument
     AddArgument(symbols::Arg),
+    /// Delete this argument
     DelArgument(symbols::Arg),
+    /// Add an additional attack
     AddAttack(symbols::Att),
+    /// Delete this attack
     DelAttack(symbols::Att),
 }
 
+impl Patch {
+    /// Parse a full update line in APXM or TGFM format.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use lib::argumentation_framework::{symbols::{Arg, Att}, Patch};
+    /// let patches = Patch::parse_line("+arg(a4):att(a4, a1):att(a2, a4).").unwrap();
+    /// assert_eq!(
+    ///    patches,
+    ///    vec![
+    ///        Patch::AddArgument(Arg { id: String::from("a4") }),
+    ///        Patch::AddAttack(Att { from: String::from("a4"), to: String::from("a1") }),
+    ///        Patch::AddAttack(Att { from: String::from("a2"), to: String::from("a4") }),
+    ///    ]
+    /// );
+    ///
+    /// let patches = Patch::parse_line("+att(a1, a3).").unwrap();
+    /// assert_eq!(
+    ///     patches,
+    ///     vec![
+    ///         Patch::AddAttack(Att { from: String::from("a1"), to: String::from("a3") }),
+    ///     ]
+    /// );
+    ///
+    /// let patches = Patch::parse_line("-att(a2,a1).").unwrap();
+    /// assert_eq!(
+    ///     patches,
+    ///     vec![
+    ///         Patch::DelAttack(Att { from: String::from("a2"), to: String::from("a1") }),
+    ///     ]
+    /// );
+    ///
+    /// let patches = Patch::parse_line("-arg(a3).").unwrap();
+    /// assert_eq!(
+    ///     patches,
+    ///     vec![
+    ///         Patch::DelArgument(Arg { id: String::from("a3") }),
+    ///     ]
+    /// );
+    /// ```
+    pub fn parse_line(input: &str) -> Result<Vec<Self>> {
+        let patches = parser::parse_apxm_tgfm_patch_line(input)?;
+        Ok(patches)
+    }
+}
+
+/// Iterator over extensions.
+///
+/// Using a [`::clingo::SolveHandle`] internally. This always needs to be returned,
+/// to recycle the handle and turn it back into the [`::clingo::Control`]
 pub struct ExtensionIter {
     handle: ::clingo::SolveHandle,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+/// An extension of an [`ArgumentationFramework`].
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Extension {
-    atoms: Vec<symbols::Arg>,
+    /// Just a list of included arguments
+    atoms: BTreeSet<symbols::Arg>,
 }
 
-impl<P: Program> ArgumentationFramework<P> {
+impl Extension {
+    /// The empty extension
+    pub const EMPTY: Extension = crate::macros::ext!();
+}
+
+impl<S: ArgumentationFrameworkSemantic> ArgumentationFramework<S> {
     /// Apply the given patch to the argumentation framework.
     fn apply_patch(&mut self, patch: Patch) {
         match patch {
@@ -95,7 +160,7 @@ impl<P: Program> ArgumentationFramework<P> {
 /// Initialize the clingo backend
 ///
 /// Loads the given args and attacks
-fn initialize_clingo_backend<P: Program>(
+fn initialize_clingo_backend<S: ArgumentationFrameworkSemantic>(
     args: &[symbols::Arg],
     attacks: &[symbols::Att],
 ) -> Result<::clingo::Control> {
@@ -115,7 +180,7 @@ fn initialize_clingo_backend<P: Program>(
     args.iter().for_each(|arg| fb.insert(arg));
     attacks.iter().for_each(|attack| fb.insert(attack));
     let mut ctl = ::clingo::control(clingo_params)?;
-    ctl.add("theory", &[], P::PROGRAM)?;
+    ctl.add("theory", &[], S::PROGRAM)?;
     ctl.add("show", &[], "#show. #show X : in(X).")?;
     ctl.add_facts(&fb)?;
     // Ground everything directly
@@ -126,7 +191,7 @@ fn initialize_clingo_backend<P: Program>(
     Ok(ctl)
 }
 
-impl<P: Program> Framework for ArgumentationFramework<P> {
+impl<S: ArgumentationFrameworkSemantic> Framework for ArgumentationFramework<S> {
     type Extension = Extension;
     type ExtensionIter = ExtensionIter;
 
@@ -138,18 +203,18 @@ impl<P: Program> Framework for ArgumentationFramework<P> {
 
     fn new(input: &str) -> Result<Self> {
         let (args, attacks) = parse_apx_tgf(input)?;
-        let clingo_ctl = initialize_clingo_backend::<P>(&args, &attacks)?;
+        let clingo_ctl = initialize_clingo_backend::<S>(&args, &attacks)?;
         Ok(ArgumentationFramework {
             args,
             attacks,
-            _p: PhantomData,
+            _semantics: PhantomData,
             _initial_file: input.to_owned(),
             clingo_ctl: Some(clingo_ctl),
         })
     }
 
     fn update(&mut self, update_line: &str) -> Result<()> {
-        tgfm::parse_line(update_line)?
+        parser::parse_apxm_tgfm_patch_line(update_line)?
             .into_iter()
             .for_each(|patch| self.apply_patch(patch));
         Ok(())
@@ -208,5 +273,13 @@ impl TryFrom<&'_ ::clingo::Model> for Extension {
             .map(|id| symbols::Arg { id })
             .collect();
         Ok(Extension { atoms })
+    }
+}
+
+impl FromIterator<ArgumentID> for Extension {
+    fn from_iter<T: IntoIterator<Item = ArgumentID>>(iter: T) -> Self {
+        Self {
+            atoms: iter.into_iter().map(|id| symbols::Arg { id }).collect(),
+        }
     }
 }

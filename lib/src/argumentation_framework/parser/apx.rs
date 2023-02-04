@@ -1,6 +1,6 @@
 use logos::Logos;
 
-use crate::framework::af::symbols;
+use crate::argumentation_framework::symbols;
 
 use super::{expect, ParserError, ParserResult};
 
@@ -72,8 +72,9 @@ fn parse_argument(lex: &mut logos::Lexer<Token>) -> ParserResult<symbols::Arg> {
 
 #[cfg(test)]
 mod tests {
+    use crate::macros::{arg, att};
+
     use super::*;
-    use crate::{arg, att};
     use pretty_assertions::assert_eq;
 
     #[test]

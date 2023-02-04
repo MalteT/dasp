@@ -1,7 +1,7 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Encoding for complete extensions
-%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
 %% Guess a set S \subseteq A
 in(X) :- not out(X), arg(X).
 out(X) :- not in(X), arg(X).

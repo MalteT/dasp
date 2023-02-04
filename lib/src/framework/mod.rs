@@ -1,13 +1,14 @@
+//! Everything around the generalized framework
 use thiserror::Error;
 
 use crate::{Error, Result};
 
-pub mod af;
 mod iter_guard;
 
 use fallible_iterator::FallibleIterator;
 pub use iter_guard::IterGuard;
 
+/// Generic ParserError
 #[derive(Debug, Error)]
 pub enum ParserError {
     #[error(
