@@ -2,18 +2,21 @@
 % Encoding for admissible extensions
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
+#external arg_(X): arg(X).
+#external att_(X, Y): att(X, Y).
+
 %% Guess a set S \subseteq A
-in(X) :- not out(X), arg(X).
-out(X) :- not in(X), arg(X).
+in(X) :- not out(X), arg_(X).
+out(X) :- not in(X), arg_(X).
 
 %% S has to be conflict-free
-:- in(X), in(Y), att(X,Y).
+:- in(X), in(Y), att_(X,Y).
 
 %% The argument x is defeated by the set S
-defeated(X) :- in(Y), att(Y,X).
+defeated(X) :- in(Y), att_(Y,X).
 
 %% The argument x is not defended by S
-not_defended(X) :- att(Y,X), not defeated(Y).
+not_defended(X) :- att_(Y,X), not defeated(Y).
 
 %% All arguments x \in S need to be defended by S
 :- in(X), not_defended(X).

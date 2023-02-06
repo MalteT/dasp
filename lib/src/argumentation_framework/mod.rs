@@ -2,7 +2,7 @@
 use std::{collections::BTreeSet, marker::PhantomData};
 
 use crate::{Error, Result};
-use clingo::{FactBase, Part, ShowType, SolveMode};
+use ::clingo::{ShowType, SolveMode};
 use fallible_iterator::FallibleIterator;
 
 use self::{parser::parse_apx_tgf, semantics::ArgumentationFrameworkSemantic};
@@ -14,6 +14,7 @@ use crate::{
 
 pub type ArgumentID = String;
 
+mod clingo;
 mod parser;
 pub mod semantics;
 pub mod symbols;
@@ -46,8 +47,8 @@ mod tests;
 ///     .collect::<BTreeSet<_>>();
 /// ```
 pub struct ArgumentationFramework<S: ArgumentationFrameworkSemantic> {
-    pub args: Vec<symbols::Arg>,
-    pub attacks: Vec<symbols::Att>,
+    pub args: Vec<symbols::Argument>,
+    pub attacks: Vec<symbols::Attack>,
     clingo_ctl: Option<::clingo::Control>,
     _initial_file: String,
     _semantics: PhantomData<S>,
@@ -57,13 +58,13 @@ pub struct ArgumentationFramework<S: ArgumentationFrameworkSemantic> {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Patch {
     /// Add an additional argument
-    AddArgument(symbols::Arg),
+    AddArgument(symbols::Argument),
     /// Delete this argument
-    DelArgument(symbols::Arg),
+    RemoveArgument(symbols::Argument),
     /// Add an additional attack
-    AddAttack(symbols::Att),
+    AddAttack(symbols::Attack),
     /// Delete this attack
-    DelAttack(symbols::Att),
+    RemoveAttack(symbols::Attack),
 }
 
 impl Patch {
@@ -125,7 +126,7 @@ pub struct ExtensionIter {
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Extension {
     /// Just a list of included arguments
-    atoms: BTreeSet<symbols::Arg>,
+    atoms: BTreeSet<symbols::Argument>,
 }
 
 impl Extension {
@@ -134,61 +135,58 @@ impl Extension {
 }
 
 impl<S: ArgumentationFrameworkSemantic> ArgumentationFramework<S> {
-    /// Apply the given patch to the argumentation framework.
-    fn apply_patch(&mut self, patch: Patch) {
-        match patch {
-            Patch::AddArgument(arg) => {
-                self.args.push(arg);
+    pub fn add_argument(&mut self, argument: symbols::Argument) -> Result {
+        // We need to make sure clingo stays uptodate, but only if it's initialized
+        if let Some(ctl) = self.clingo_ctl.as_mut() {
+            clingo::add_argument_to_facts_and_enable_external_symbol(ctl, &argument)?;
+        }
+        // Push the argument to our list of arguments
+        self.args.push(argument);
+        Ok(())
+    }
+    pub fn remove_argument(
+        &mut self,
+        argument: &symbols::Argument,
+    ) -> Result<Option<symbols::Argument>> {
+        if let Some(idx) = self.args.iter().position(|a| a == argument) {
+            if let Some(ctl) = self.clingo_ctl.as_mut() {
+                // Disable the external symbol for this argument
+                clingo::disable_external_argument_symbol(ctl, argument)?;
             }
-            Patch::DelArgument(arg) => {
-                if let Some(idx) = self.args.iter().position(|a| *a == arg) {
-                    self.args.swap_remove(idx);
-                }
-            }
-            Patch::AddAttack(att) => {
-                self.attacks.push(att);
-            }
-            Patch::DelAttack(att) => {
-                if let Some(idx) = self.attacks.iter().position(|a| *a == att) {
-                    self.attacks.swap_remove(idx);
-                }
-            }
+            Ok(Some(self.args.swap_remove(idx)))
+        } else {
+            Ok(None)
         }
     }
-}
+    pub fn add_attack(&mut self, attack: symbols::Attack) -> Result {
+        // Make sure to keep clingo uptodate
+        if let Some(ctl) = self.clingo_ctl.as_mut() {
+            clingo::add_attack_to_facts_and_enable_external_symbol(ctl, &attack)?;
+        }
+        self.attacks.push(attack);
+        Ok(())
+    }
+    pub fn remove_attack(&mut self, attack: &symbols::Attack) -> Result<Option<symbols::Attack>> {
+        if let Some(idx) = self.attacks.iter().position(|a| a == attack) {
+            if let Some(ctl) = self.clingo_ctl.as_mut() {
+                // Disable the external symbol for this attack
+                clingo::disable_external_attack_symbol(ctl, attack)?;
+            }
+            Ok(Some(self.attacks.swap_remove(idx)))
+        } else {
+            Ok(None)
+        }
+    }
+    /// Apply the given patch to the argumentation framework.
+    pub fn apply_patch(&mut self, patch: Patch) -> Result {
+        match patch {
+            Patch::AddArgument(arg) => self.add_argument(arg),
+            Patch::RemoveArgument(arg) => self.remove_argument(&arg).map(|_| ()),
 
-/// Initialize the clingo backend
-///
-/// Loads the given args and attacks
-fn initialize_clingo_backend<S: ArgumentationFrameworkSemantic>(
-    args: &[symbols::Arg],
-    attacks: &[symbols::Att],
-) -> Result<::clingo::Control> {
-    // Assemble clingo parameters
-    // FIXME: Make core count flexible
-    let clingo_params = vec![
-        // Use multiple cores [--parallel-mode 12]
-        "--parallel-mode",
-        "12",
-        // Always prepare to compute all models [0]
-        "0",
-    ]
-    .into_iter()
-    .map(String::from)
-    .collect();
-    let mut fb = FactBase::new();
-    args.iter().for_each(|arg| fb.insert(arg));
-    attacks.iter().for_each(|attack| fb.insert(attack));
-    let mut ctl = ::clingo::control(clingo_params)?;
-    ctl.add("theory", &[], S::PROGRAM)?;
-    ctl.add("show", &[], "#show. #show X : in(X).")?;
-    ctl.add_facts(&fb)?;
-    // Ground everything directly
-    let base = Part::new("base", vec![])?;
-    let theory = Part::new("theory", vec![])?;
-    let show = Part::new("show", vec![])?;
-    ctl.ground(&[base, theory, show])?;
-    Ok(ctl)
+            Patch::AddAttack(att) => self.add_attack(att),
+            Patch::RemoveAttack(att) => self.remove_attack(&att).map(|_| ()),
+        }
+    }
 }
 
 impl<S: ArgumentationFrameworkSemantic> Framework for ArgumentationFramework<S> {
@@ -203,7 +201,7 @@ impl<S: ArgumentationFrameworkSemantic> Framework for ArgumentationFramework<S> 
 
     fn new(input: &str) -> Result<Self> {
         let (args, attacks) = parse_apx_tgf(input)?;
-        let clingo_ctl = initialize_clingo_backend::<S>(&args, &attacks)?;
+        let clingo_ctl = clingo::initialize_backend::<S>(&args, &attacks)?;
         Ok(ArgumentationFramework {
             args,
             attacks,
@@ -214,10 +212,12 @@ impl<S: ArgumentationFrameworkSemantic> Framework for ArgumentationFramework<S> 
     }
 
     fn update(&mut self, update_line: &str) -> Result<()> {
-        parser::parse_apxm_tgfm_patch_line(update_line)?
-            .into_iter()
-            .for_each(|patch| self.apply_patch(patch));
-        Ok(())
+        fallible_iterator::convert(
+            parser::parse_apxm_tgfm_patch_line(update_line)?
+                .into_iter()
+                .map(Ok),
+        )
+        .for_each(|patch| self.apply_patch(patch))
     }
 
     fn drop_extension_iter(&mut self, iter: Self::ExtensionIter) -> Result<()> {
@@ -227,7 +227,7 @@ impl<S: ArgumentationFrameworkSemantic> Framework for ArgumentationFramework<S> 
 }
 
 impl GenericExtension for Extension {
-    type Arg = symbols::Arg;
+    type Arg = symbols::Argument;
 
     fn contains(&self, arg: &Self::Arg) -> bool {
         self.atoms.contains(arg)
@@ -238,7 +238,7 @@ impl GenericExtension for Extension {
             + &self
                 .atoms
                 .iter()
-                .map(|atom| atom.id.clone())
+                .map(|atom| atom.0.clone())
                 .reduce(|acc, atom| format!("{acc},{atom}"))
                 .unwrap_or_default()
             + "]"
@@ -270,7 +270,7 @@ impl TryFrom<&'_ ::clingo::Model> for Extension {
             .iter()
             .map(ToString::to_string)
             .map(|id| id.trim_matches('"').to_owned())
-            .map(|id| symbols::Arg { id })
+            .map(symbols::Argument)
             .collect();
         Ok(Extension { atoms })
     }
@@ -279,7 +279,7 @@ impl TryFrom<&'_ ::clingo::Model> for Extension {
 impl FromIterator<ArgumentID> for Extension {
     fn from_iter<T: IntoIterator<Item = ArgumentID>>(iter: T) -> Self {
         Self {
-            atoms: iter.into_iter().map(|id| symbols::Arg { id }).collect(),
+            atoms: iter.into_iter().map(symbols::Argument).collect(),
         }
     }
 }

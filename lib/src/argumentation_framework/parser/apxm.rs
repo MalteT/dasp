@@ -38,16 +38,16 @@ enum AddDel {
 }
 
 impl AddDel {
-    fn arg(&self, arg: symbols::Arg) -> Patch {
+    fn arg(&self, arg: symbols::Argument) -> Patch {
         match self {
             Self::Add => Patch::AddArgument(arg),
-            Self::Del => Patch::DelArgument(arg),
+            Self::Del => Patch::RemoveArgument(arg),
         }
     }
-    fn att(&self, att: symbols::Att) -> Patch {
+    fn att(&self, att: symbols::Attack) -> Patch {
         match self {
             Self::Add => Patch::AddAttack(att),
-            Self::Del => Patch::DelAttack(att),
+            Self::Del => Patch::RemoveAttack(att),
         }
     }
 }
@@ -108,7 +108,7 @@ fn parse_patch(lex: &mut Lexer<Token>, add_del: AddDel) -> ParserResult<Patch> {
     Ok(patch)
 }
 
-fn parse_att_tuple(lex: &mut Lexer<Token>) -> ParserResult<symbols::Att> {
+fn parse_att_tuple(lex: &mut Lexer<Token>) -> ParserResult<symbols::Attack> {
     expect(lex, Token::LeftParen)?;
     expect(lex, Token::Text)?;
     let from = lex.slice().to_owned();
@@ -116,15 +116,15 @@ fn parse_att_tuple(lex: &mut Lexer<Token>) -> ParserResult<symbols::Att> {
     expect(lex, Token::Text)?;
     let to = lex.slice().to_owned();
     expect(lex, Token::RightParen)?;
-    Ok(symbols::Att { from, to })
+    Ok(symbols::Attack(from, to))
 }
 
-fn parse_arg_singleton(lex: &mut Lexer<Token>) -> ParserResult<symbols::Arg> {
+fn parse_arg_singleton(lex: &mut Lexer<Token>) -> ParserResult<symbols::Argument> {
     expect(lex, Token::LeftParen)?;
     expect(lex, Token::Text)?;
     let id = lex.slice().to_owned();
     expect(lex, Token::RightParen)?;
-    Ok(symbols::Arg { id })
+    Ok(symbols::Argument(id))
 }
 
 fn parse_add_del(lex: &mut Lexer<Token>) -> ParserResult<AddDel> {
@@ -155,7 +155,7 @@ mod tests {
         assert_eq!(patches, vec![Patch::AddAttack(att!("a1", "a3"))]);
 
         let patches = parse_line("-att(a2, a1).").unwrap();
-        assert_eq!(patches, vec![Patch::DelAttack(att!("a2", "a1"))]);
+        assert_eq!(patches, vec![Patch::RemoveAttack(att!("a2", "a1"))]);
 
         let patches = parse_line("+arg(a4):att(a4, a1):att(a2,a4).").unwrap();
         assert_eq!(
@@ -168,6 +168,6 @@ mod tests {
         );
 
         let patches = parse_line("-arg(a3).").unwrap();
-        assert_eq!(patches, vec![Patch::DelArgument(arg!("a3"))]);
+        assert_eq!(patches, vec![Patch::RemoveArgument(arg!("a3"))]);
     }
 }

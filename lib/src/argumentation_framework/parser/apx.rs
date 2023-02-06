@@ -1,8 +1,8 @@
 use logos::Logos;
 
-use crate::argumentation_framework::symbols;
+use crate::{argumentation_framework::symbols, framework::ParserError};
 
-use super::{expect, ParserError, ParserResult};
+use super::{expect, ParserResult};
 
 #[derive(Debug, PartialEq, Eq, Logos)]
 pub enum Token {
@@ -25,7 +25,7 @@ pub enum Token {
     Error,
 }
 
-pub fn parse_file(input: &str) -> ParserResult<(Vec<symbols::Arg>, Vec<symbols::Att>)> {
+pub fn parse_file(input: &str) -> ParserResult<(Vec<symbols::Argument>, Vec<symbols::Attack>)> {
     let mut lex = Token::lexer(input);
     let mut args = vec![];
     let mut attacks = vec![];
@@ -49,7 +49,7 @@ pub fn parse_file(input: &str) -> ParserResult<(Vec<symbols::Arg>, Vec<symbols::
     Ok((args, attacks))
 }
 
-fn parse_attack(lex: &mut logos::Lexer<Token>) -> ParserResult<symbols::Att> {
+fn parse_attack(lex: &mut logos::Lexer<Token>) -> ParserResult<symbols::Attack> {
     expect(lex, Token::LeftParen)?;
     expect(lex, Token::Text)?;
     let from = lex.slice().to_owned();
@@ -58,16 +58,16 @@ fn parse_attack(lex: &mut logos::Lexer<Token>) -> ParserResult<symbols::Att> {
     let to = lex.slice().to_owned();
     expect(lex, Token::RightParen)?;
     expect(lex, Token::Period)?;
-    Ok(symbols::Att { from, to })
+    Ok(symbols::Attack(from, to))
 }
 
-fn parse_argument(lex: &mut logos::Lexer<Token>) -> ParserResult<symbols::Arg> {
+fn parse_argument(lex: &mut logos::Lexer<Token>) -> ParserResult<symbols::Argument> {
     expect(lex, Token::LeftParen)?;
     expect(lex, Token::Text)?;
     let id = lex.slice().to_owned();
     expect(lex, Token::RightParen)?;
     expect(lex, Token::Period)?;
-    Ok(symbols::Arg { id })
+    Ok(symbols::Argument(id))
 }
 
 #[cfg(test)]
@@ -83,7 +83,7 @@ mod tests {
         assert_eq! {
                     af,
         (                vec![arg!("some1"), arg!("some2")],
-                        vec![symbols::Att {from: "some1".into(), to: "some2".into()}],
+                        vec![symbols::Attack("some1".into(), "some2".into())],
                     )
                 }
 

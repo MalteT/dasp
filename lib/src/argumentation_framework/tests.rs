@@ -154,11 +154,11 @@ fn update_admissible_af() {
     let exts = extensions_of(&mut af);
     assert_eq!(exts, set![ext!(), ext!("1")]);
 
-    af.update("+att(1, 1).").expect("Updated AF");
+    af.update("+att(1, 1).").expect("Added attack to AF");
     let exts = extensions_of(&mut af);
     assert_eq!(exts, set![ext!()]);
 
-    af.update("-att(1, 2).").expect("Updated AF");
+    af.update("-att(1, 2).").expect("Removed attack from AF");
     let exts = extensions_of(&mut af);
     assert_eq!(exts, set![ext!(), ext!("2")]);
 }

@@ -17,14 +17,14 @@ pub enum Token {
     Error,
 }
 
-pub fn parse_file(input: &str) -> ParserResult<(Vec<symbols::Arg>, Vec<symbols::Att>)> {
+pub fn parse_file(input: &str) -> ParserResult<(Vec<symbols::Argument>, Vec<symbols::Attack>)> {
     let mut lex = Token::lexer(input);
     let args = parse_arguments(&mut lex)?;
     let attacks = parse_attacks(&mut lex)?;
     Ok((args, attacks))
 }
 
-fn parse_attacks(lex: &mut Lexer<Token>) -> ParserResult<Vec<symbols::Att>> {
+fn parse_attacks(lex: &mut Lexer<Token>) -> ParserResult<Vec<symbols::Attack>> {
     let mut attacks = vec![];
     loop {
         let next = lex.next();
@@ -34,7 +34,7 @@ fn parse_attacks(lex: &mut Lexer<Token>) -> ParserResult<Vec<symbols::Att>> {
                 expect(lex, Token::Whitespace)?;
                 expect(lex, Token::Text)?;
                 let to = lex.slice().to_owned();
-                attacks.push(symbols::Att { from, to })
+                attacks.push(symbols::Attack(from, to))
             }
             Some(token) => {
                 break Err(ParserError::UnexpectedToken {
@@ -49,14 +49,12 @@ fn parse_attacks(lex: &mut Lexer<Token>) -> ParserResult<Vec<symbols::Att>> {
     }
 }
 
-fn parse_arguments(lex: &mut Lexer<Token>) -> ParserResult<Vec<symbols::Arg>> {
+fn parse_arguments(lex: &mut Lexer<Token>) -> ParserResult<Vec<symbols::Argument>> {
     let mut args = vec![];
     loop {
         let next = lex.next();
         match next {
-            Some(Token::Text) => args.push(symbols::Arg {
-                id: lex.slice().to_owned(),
-            }),
+            Some(Token::Text) => args.push(symbols::Argument(lex.slice().to_owned())),
             Some(Token::Hash) => break,
             Some(token) => {
                 return Err(ParserError::UnexpectedToken {
@@ -72,18 +70,15 @@ fn parse_arguments(lex: &mut Lexer<Token>) -> ParserResult<Vec<symbols::Arg>> {
     Ok(args)
 }
 
-impl From<RawArgument> for symbols::Arg {
+impl From<RawArgument> for symbols::Argument {
     fn from(raw: RawArgument) -> Self {
-        Self { id: raw.id }
+        Self(raw.id)
     }
 }
 
-impl From<RawAttack> for symbols::Att {
+impl From<RawAttack> for symbols::Attack {
     fn from(raw: RawAttack) -> Self {
-        Self {
-            from: raw.from,
-            to: raw.to,
-        }
+        Self(raw.from, raw.to)
     }
 }
 

@@ -8,7 +8,7 @@ mod tgf;
 mod tgfm;
 type ParserResult<T> = Result<T, ParserError>;
 
-pub fn parse_apx_tgf(input: &str) -> ParserResult<(Vec<symbols::Arg>, Vec<symbols::Att>)> {
+pub fn parse_apx_tgf(input: &str) -> ParserResult<(Vec<symbols::Argument>, Vec<symbols::Attack>)> {
     apx::parse_file(input).or_else(|_| tgf::parse_file(input))
 }
 

@@ -2,6 +2,8 @@ pub mod argumentation_framework;
 mod error;
 pub mod framework;
 pub mod semantics;
+#[cfg(test)]
+mod tests;
 
 pub use error::{Error, Result};
 pub use framework::{Framework, GenericExtension};
@@ -43,7 +45,7 @@ mod macros {
     /// Create an argument for Dung's [`crate::argumentation_framework::ArgumentationFramework`]
     macro_rules! arg {
         ($name:literal) => {
-            crate::argumentation_framework::symbols::Arg { id: $name.into() }
+            crate::argumentation_framework::symbols::Argument($name.into())
         };
     }
     pub(crate) use arg;
@@ -51,10 +53,7 @@ mod macros {
     /// Create an attack for Dung's [`crate::argumentation_framework::ArgumentationFramework`]
     macro_rules! att {
         ($from:literal, $to:literal) => {
-            crate::argumentation_framework::symbols::Att {
-                from: $from.into(),
-                to: $to.into(),
-            }
+            crate::argumentation_framework::symbols::Attack($from.into(), $to.into())
         };
     }
     pub(crate) use att;
