@@ -1,4 +1,4 @@
-use clingo::{FactBase, Model, ModelType, Part, ShowType, SolveMode, Symbol};
+use clingo::{Model, ModelType, Part, ShowType, SolveMode, Symbol};
 
 // This is just copy-pasted from clingo's examples to have some human feedback
 fn print_model(model: &Model) {
@@ -70,21 +70,19 @@ fn i_correctly_understand_clingos_symbolic_atoms() {
 }
 
 #[test]
-fn i_can_actually_repeat_the_grounding() {
+fn i_can_actually_repeat_the_grounding_to_add_facts() {
     let mut ctl = clingo::control(vec![]).expect("Init control");
     ctl.add(
-        "theory",
+        "base",
         &[],
         r#"
-            b(X): a(X).
+            a(1).
+            b(X):- a(X).
         "#,
     )
     .expect("Adding program to base");
-    let mut facts = FactBase::new();
-    facts.insert(&Symbol::create_function("a", &[Symbol::create_number(1)], true).unwrap());
-    let theory = Part::new("theory", vec![]).unwrap();
-    ctl.add_facts(&facts).unwrap();
-    ctl.ground(&[theory.clone()]).expect("Grounding");
+    let base = Part::new("base", vec![]).unwrap();
+    ctl.ground(&[base.clone()]).expect("Grounding");
     // Get the first model
     let mut solve_handle = ctl.solve(SolveMode::YIELD, &[]).expect("Solving");
     solve_handle.get().unwrap();
@@ -103,12 +101,15 @@ fn i_can_actually_repeat_the_grounding() {
     assert!(!model.contains(b_2).expect("Checking model for b(2)"));
     ctl = solve_handle.close().expect("Returning solve handle");
     // == SECOND GROUNDING ==
-    // ctl.add("facts", &[], "a(2).")
-    //     .expect("Adding program to base");
-    let mut facts = FactBase::new();
-    facts.insert(&Symbol::create_function("a", &[Symbol::create_number(2)], true).unwrap());
-    ctl.add_facts(&facts).unwrap();
-    ctl.ground(&[theory]).expect("Grounding");
+    ctl.add(
+        "base",
+        &[],
+        r#"
+            a(2).
+        "#,
+    )
+    .expect("Adding second fact");
+    ctl.ground(&[base]).expect("Grounding");
     // Get the first model
     let mut solve_handle = ctl.solve(SolveMode::YIELD, &[]).expect("Solving");
     solve_handle.get().unwrap();
