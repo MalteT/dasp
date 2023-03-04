@@ -4,8 +4,8 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % For the remaining part we need to put an order on the domain.
-% Therefore, we define a successor-relation with infinum and supremum 
-% as follows 
+% Therefore, we define a successor-relation with infinum and supremum
+% as follows
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 lt(X,Y) :- arg(X),arg(Y), X<Y.

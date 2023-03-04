@@ -8,6 +8,18 @@ mod tests;
 pub use error::{Error, Result};
 pub use framework::{Framework, GenericExtension};
 
+/// Try setting up logging for unit tests
+#[cfg(test)]
+#[ctor::ctor]
+fn setup_logging() {
+    pretty_env_logger::formatted_builder()
+        .is_test(true)
+        .filter_level(log::LevelFilter::Trace)
+        .try_init()
+        .ok();
+    log::trace!("Test logger setup");
+}
+
 /// Macro definitions used throughout the crate
 ///
 /// The language server marks them unused, so let's ignore that.

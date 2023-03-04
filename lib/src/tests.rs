@@ -1,20 +1,15 @@
-use clingo::{Model, ModelType, Part, ShowType, SolveMode, Symbol};
+use clingo::{Model, ModelType, Part, ShowType, SolveMode, Symbol, ToSymbol};
 
-macro_rules! symb {
-    ($num:literal) => {
-        Ok(Symbol::create_number($num))
-    };
-    ($name:ident ( $( $( $arg:tt )* ),* )) => {
-        {
-            use fallible_iterator::FallibleIterator;
-            let name: &str = stringify!($name);
-            let args: Result<Vec<Symbol>, _> = ::fallible_iterator::convert([ $( symb!($( $arg )*) ),* ].into_iter()).collect();
-            match args {
-                Ok(args) => Symbol::create_function(name, &args, true),
-                Err(why) => Err(why)
-            }
-        }
-    };
+/// Just some symbols for testing purposes
+mod symb {
+    use clingo::{ClingoError, Symbol, ToSymbol};
+
+    #[derive(ToSymbol)]
+    pub struct A(pub i32);
+    #[derive(ToSymbol)]
+    pub struct B(pub i32);
+    #[derive(ToSymbol)]
+    pub struct C;
 }
 
 // This is just copy-pasted from clingo's examples to have some human feedback
@@ -69,7 +64,7 @@ fn i_correctly_understand_clingos_symbolic_atoms() {
     .expect("Adding program to base");
     let base = Part::new("base", vec![]).unwrap();
     ctl.ground(&[base]).expect("Grounding");
-    let symbol = symb!(b(1)).unwrap();
+    let symbol = symb::B(1).symbol().unwrap();
     let mut found_it = false;
     ctl.symbolic_atoms()
         .expect("Getting symbolic atoms")
@@ -108,10 +103,10 @@ fn i_can_actually_repeat_the_grounding_to_add_facts() {
         .expect("Getting Model")
         .expect("Model should exist");
     print_model(&model);
-    let a_1 = symb!(a(1)).unwrap();
-    let b_1 = symb!(b(1)).unwrap();
-    let a_2 = symb!(a(2)).unwrap();
-    let b_2 = symb!(b(2)).unwrap();
+    let a_1 = symb::A(1).symbol().unwrap();
+    let b_1 = symb::A(1).symbol().unwrap();
+    let a_2 = symb::A(2).symbol().unwrap();
+    let b_2 = symb::A(2).symbol().unwrap();
     assert!(model.contains(a_1).expect("Checking model for a(1)"));
     assert!(model.contains(b_1).expect("Checking model for b(1)"));
     assert!(!model.contains(a_2).expect("Checking model for a(2)"));
@@ -145,30 +140,45 @@ fn i_can_actually_repeat_the_grounding_to_add_facts() {
 fn i_understand_grounding_now() {
     let mut ctl = clingo::control(vec![]).expect("Init control");
     ctl.add(
+        "theory",
+        &[],
+        r#"
+            #external arg(X) : arg_(X).
+            att(X, X):- arg(X).
+        "#,
+    )
+    .expect("Adding theory program");
+    ctl.add(
         "base",
         &[],
         r#"
-            arg_(1..4).
-            #external arg(X) : arg_(X).
-            att(X, X):- arg(X).
+            arg_("1";"2";"3";"4").
             #show arg/1.
             #show att/2.
         "#,
     )
     .expect("Adding program to base");
     let base = Part::new("base", vec![]).unwrap();
-    ctl.ground(&[base.clone()]).expect("Grounding");
+    let theory = Part::new("theory", vec![]).unwrap();
+    // Grounding both `base` and `theory` will add the external toggles
+    // and attacks for the `arg_` in the base
+    ctl.ground(&[base.clone(), theory.clone()])
+        .expect("Grounding");
+    // Adding additional `arg_`s is now possible
     ctl.add(
-        "facts",
+        "update",
         &[],
         r#"
-            arg_(5..8).
+            arg_("5";"6";"7";"8").
         "#,
     )
     .unwrap();
-    let facts = Part::new("facts", vec![]).unwrap();
-    ctl.ground(&[base, facts]).expect("Grounding");
-    let arg7 = symb!(arg(7)).unwrap();
+    let update = Part::new("update", vec![]).unwrap();
+    // We have to reground theory aswell, to find the required
+    // atom below. Try removing `theory` from the list of programs to make this test fail
+    ctl.ground(&[update, theory]).expect("Grounding");
+    let arg7 =
+        Symbol::create_function("arg", &[Symbol::create_string("7").unwrap()], true).unwrap();
     let atom = ctl
         .symbolic_atoms()
         .expect("Getting symbolic atoms")
@@ -176,13 +186,16 @@ fn i_understand_grounding_now() {
         .expect("Iter over symbolic atoms")
         .find(|atom| {
             let s = atom.symbol().unwrap();
+            eprintln!("atom {s} {arg7}");
             s == arg7
         })
         .expect("Literal exists");
+    // We can now assign a truth-value to the atom we've selected above
+    // Removing this makes this test fail aswell
     ctl.assign_external(atom.literal().unwrap(), clingo::TruthValue::True)
         .unwrap();
+    // Solving will now yield `arg(7)` and `att(7,7)` as defined by our theory
     let mut solve_handle = ctl.solve(SolveMode::YIELD, &[]).unwrap();
-
     solve_handle.get().unwrap();
     let model = solve_handle
         .model()
@@ -190,18 +203,14 @@ fn i_understand_grounding_now() {
         .expect("Model should exist");
     print_model(&model);
     assert!(model.contains(arg7).expect("Checking model for arg(7)"));
-    let att77 = symb!(att(7, 7)).unwrap();
     let att77 = Symbol::create_function(
         "att",
-        &[Symbol::create_number(7), Symbol::create_number(7)],
+        &[
+            Symbol::create_string("7").unwrap(),
+            Symbol::create_string("7").unwrap(),
+        ],
         true,
     )
     .unwrap();
     assert!(model.contains(att77).expect("Checking model for att(7,7)"));
-}
-
-#[test]
-fn symb_macro_works() {
-    let symbol = symb!(a(1));
-    let symbol = symb!(a(a(1)));
 }

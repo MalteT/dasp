@@ -1,22 +1,19 @@
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% Encoding for admissible extensions
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    % Based on arg/att, create atoms that can actually be toggled
+    #external arg_(X): arg(X).
+    #external att_(X, Y): att(X, Y).
 
-#external arg_(X): arg(X).
-#external att_(X, Y): att(X, Y).
+    % Guess a set S \subseteq A
+    in(X) :- not out(X), arg_(X).
+    out(X) :- not in(X), arg_(X).
 
-%% Guess a set S \subseteq A
-in(X) :- not out(X), arg_(X).
-out(X) :- not in(X), arg_(X).
+    % S has to be conflict-free
+    :- in(X), in(Y), att_(X,Y).
 
-%% S has to be conflict-free
-:- in(X), in(Y), att_(X,Y).
+    % The argument x is defeated by the set S
+    defeated(X) :- in(Y), att_(Y,X).
 
-%% The argument x is defeated by the set S
-defeated(X) :- in(Y), att_(Y,X).
+    % The argument x is not defended by S
+    not_defended(X) :- att_(Y,X), not defeated(Y).
 
-%% The argument x is not defended by S
-not_defended(X) :- att_(Y,X), not defeated(Y).
-
-%% All arguments x \in S need to be defended by S
-:- in(X), not_defended(X).
+    % All arguments x \in S need to be defended by S
+    :- in(X), not_defended(X).

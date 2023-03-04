@@ -145,6 +145,51 @@ fn simple_stable_af() {
 fn update_admissible_af() {
     let mut af = ArgumentationFramework::<Admissible>::new(
         r#"
+            arg(alpha).
+            arg(beta).
+            att(alpha, beta).
+        "#,
+    )
+    .expect("Creating AF");
+    let exts = extensions_of(&mut af);
+    assert_eq!(exts, set![ext!(), ext!("alpha")]);
+
+    af.update("+att(alpha, alpha).")
+        .expect("Added attack to AF");
+    let exts = extensions_of(&mut af);
+    assert_eq!(exts, set![ext!()]);
+
+    af.update("-att(alpha, beta).")
+        .expect("Removed attack from AF");
+    let exts = extensions_of(&mut af);
+    assert_eq!(exts, set![ext!(), ext!("beta")]);
+}
+
+#[test]
+fn re_adding_arguments_in_admissible_af() {
+    let mut af = ArgumentationFramework::<Admissible>::new(
+        r#"
+            arg(1).
+            arg(2).
+        "#,
+    )
+    .expect("Creating AF");
+    let exts = extensions_of(&mut af);
+    assert_eq!(exts, set![ext!(), ext!("1"), ext!("2"), ext!("1", "2")]);
+
+    af.update("-arg(1).").expect("Remove argument 1");
+    let exts = extensions_of(&mut af);
+    assert_eq!(exts, set![ext!(), ext!("2")]);
+
+    af.update("+arg(1).").expect("Re-Add argument 1");
+    let exts = extensions_of(&mut af);
+    assert_eq!(exts, set![ext!(), ext!("1"), ext!("2"), ext!("1", "2")]);
+}
+
+#[test]
+fn re_adding_attacks_in_admissible_af() {
+    let mut af = ArgumentationFramework::<Admissible>::new(
+        r#"
             arg(1).
             arg(2).
             att(1, 2).
@@ -154,11 +199,11 @@ fn update_admissible_af() {
     let exts = extensions_of(&mut af);
     assert_eq!(exts, set![ext!(), ext!("1")]);
 
-    af.update("+att(1, 1).").expect("Added attack to AF");
+    af.update("-att(1, 2).").expect("Remove attack from 1 to 2");
     let exts = extensions_of(&mut af);
-    assert_eq!(exts, set![ext!()]);
+    assert_eq!(exts, set![ext!(), ext!("1"), ext!("2"), ext!("1", "2")]);
 
-    af.update("-att(1, 2).").expect("Removed attack from AF");
+    af.update("+att(1, 2).").expect("Re-Add attack from 1 to 2");
     let exts = extensions_of(&mut af);
-    assert_eq!(exts, set![ext!(), ext!("2")]);
+    assert_eq!(exts, set![ext!(), ext!("1")]);
 }
