@@ -56,10 +56,10 @@ impl RevisionedSymbol for Argument {
 impl RevisionedSymbol for Attack {
     /// Get the symbol for this Attack for the given revision.
     /// ```
-    /// # use lib::argumentation_framework::symbols::Attack;
+    /// # use lib::argumentation_framework::symbols::{RevisionedSymbol, Attack};
     /// let att = Attack::new("from", "to");
     /// let symb_string = att.symbol(42).unwrap().to_string();
-    /// assert_eq!(symb_string, r#"att("from", "to", 42)"#);
+    /// assert_eq!(symb_string, r#"attack("from","to",42)"#);
     /// ```
     fn symbol(&self, revision: u32) -> Result<Symbol> {
         debug_assert!(revision <= i32::MAX as u32);

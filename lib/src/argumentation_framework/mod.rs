@@ -76,14 +76,14 @@ impl Patch {
     /// # Example
     ///
     /// ```
-    /// # use lib::argumentation_framework::{symbols::{Arg, Att}, Patch};
+    /// # use lib::argumentation_framework::{symbols::{Argument, Attack, RevisionedSymbol}, Patch};
     /// let patches = Patch::parse_line("+arg(a4):att(a4, a1):att(a2, a4).").unwrap();
     /// assert_eq!(
     ///    patches,
     ///    vec![
-    ///        Patch::AddArgument(Arg { id: String::from("a4") }),
-    ///        Patch::AddAttack(Att { from: String::from("a4"), to: String::from("a1") }),
-    ///        Patch::AddAttack(Att { from: String::from("a2"), to: String::from("a4") }),
+    ///        Patch::AddArgument(Argument(String::from("a4"))),
+    ///        Patch::AddAttack(Attack(String::from("a4"), String::from("a1"))),
+    ///        Patch::AddAttack(Attack(String::from("a2"), String::from("a4"))),
     ///    ]
     /// );
     ///
@@ -91,7 +91,7 @@ impl Patch {
     /// assert_eq!(
     ///     patches,
     ///     vec![
-    ///         Patch::AddAttack(Att { from: String::from("a1"), to: String::from("a3") }),
+    ///         Patch::AddAttack(Attack(String::from("a1"), String::from("a3"))),
     ///     ]
     /// );
     ///
@@ -99,7 +99,7 @@ impl Patch {
     /// assert_eq!(
     ///     patches,
     ///     vec![
-    ///         Patch::DelAttack(Att { from: String::from("a2"), to: String::from("a1") }),
+    ///         Patch::RemoveAttack(Attack(String::from("a2"), String::from("a1"))),
     ///     ]
     /// );
     ///
@@ -107,7 +107,7 @@ impl Patch {
     /// assert_eq!(
     ///     patches,
     ///     vec![
-    ///         Patch::DelArgument(Arg { id: String::from("a3") }),
+    ///         Patch::RemoveArgument(Argument(String::from("a3"))),
     ///     ]
     /// );
     /// ```

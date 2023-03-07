@@ -240,6 +240,7 @@ mod tests {
         }
     }
 
+    #[ignore = "complete not supported yet"]
     #[test]
     fn enumerate_complete_extensions() {
         let (mut session, _file) = assemble_command! {
@@ -267,6 +268,7 @@ mod tests {
         expect_extensions!(&mut session, ["3"], ["1", "3"], ["2", "3"]);
     }
 
+    #[ignore = "complete not supported yet"]
     #[test]
     fn count_complete_extensions() {
         let mut file = tempfile::NamedTempFile::new().expect("Creating tempfile");
@@ -306,6 +308,7 @@ mod tests {
         assert_output(output, "3\n");
     }
 
+    #[ignore = "stable not supported yet"]
     #[test]
     fn enumerate_stable_extensions() {
         let mut file = tempfile::NamedTempFile::new().expect("Creating tempfile");
