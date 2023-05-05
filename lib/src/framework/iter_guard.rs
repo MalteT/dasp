@@ -28,6 +28,7 @@ impl<'f, F: Framework> IterGuard<'f, F> {
 
 impl<F: Framework> Drop for IterGuard<'_, F> {
     fn drop(&mut self) {
+        log::trace!("Dropping extension iter");
         let iter = self.iter.take().unwrap();
         self.framework.drop_extension_iter(iter).ok();
     }

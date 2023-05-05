@@ -15,14 +15,21 @@ fn extensions<S: ArgumentationFrameworkSemantic>(program: &str) -> BTreeSet<Exte
 fn extensions_of<S: ArgumentationFrameworkSemantic>(
     af: &mut ArgumentationFramework<S>,
 ) -> BTreeSet<Extension> {
-    let extensions = af
+    let extensions_vec = af
         .enumerate_extensions()
         .expect("Enumerating extensions")
         .by_ref()
-        .collect::<BTreeSet<_>>()
-        .expect("Collecting extensions into hashset")
-        .clone();
-    extensions
+        .inspect(|ext| Ok(log::trace!("Found extension {ext:?}")))
+        .collect::<Vec<_>>()
+        .expect("Collecting extensions into hashset");
+    let extensions_count = extensions_vec.len();
+    let extensions_set = extensions_vec.into_iter().collect::<BTreeSet<_>>().clone();
+    assert_eq!(
+        extensions_count,
+        extensions_set.len(),
+        "Some extensions occured more than once!"
+    );
+    extensions_set
 }
 
 #[test]

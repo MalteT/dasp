@@ -40,14 +40,14 @@ pub fn initialize_backend<S: ArgumentationFrameworkSemantic>(
 fn ground(ctl: &mut Control, revision: u32) -> Result {
     let parts = match revision {
         0 => {
-            log::trace!("Grounding programs for revision {revision}: base, theory");
+            log::trace!("Grounding programs: base(), theory({revision})");
             vec![
                 Part::new("base", vec![])?,
                 Part::new("theory", vec![Symbol::create_number(revision as i32)])?,
             ]
         }
         1.. => {
-            log::trace!("Grounding programs for revision {revision}: update_{revision}, theory");
+            log::trace!("Grounding programs: update_{revision}(), theory({revision})");
             vec![
                 Part::new(&format!("update_{revision}"), vec![])?,
                 Part::new("theory", vec![Symbol::create_number(revision as i32)])?,
@@ -88,50 +88,59 @@ fn assemble_clingo_parameters() -> Vec<String> {
     .collect()
 }
 
-pub fn add_argument(ctl: &mut Control, argument: &symbols::Argument, revision: u32) -> Result {
-    let revision_name = format!("update_{revision}");
+fn add_program(ctl: &mut Control, name: &str, content: &str, revision: u32) -> Result {
     // Add argument to update_{revision} program
-    log::trace!("Adding program {revision_name} to clingo");
-    ctl.add(
-        &revision_name,
-        &[],
-        &format!(r"{}.", argument.symbol(revision)?.to_string()),
-    )?;
+    log::trace!("Adding program {name:?} to clingo: {content:?}");
+    ctl.add(&name, &[], &content)?;
     // Re-Ground
     ground(ctl, revision)?;
     Ok(())
 }
 
-pub fn add_attack(ctl: &mut Control, attack: &symbols::Attack, revision: u32) -> Result {
-    let revision_name = format!("update_{revision}");
-    let content = format!(r"{}.", attack.symbol(revision)?.to_string());
-    // Add attack to update_{revision} program
-    log::trace!("Adding program {revision_name} with {content:?}");
-    ctl.add(&revision_name, &[], &content)?;
-    // Re-Ground
-    ground(ctl, revision)?;
-    Ok(())
+pub fn add_argument<S: ArgumentationFrameworkSemantic>(
+    ctl: &mut Control,
+    argument: &symbols::Argument,
+    revision: u32,
+) -> Result {
+    let name = format!("update_{revision}");
+    let content = format!(r"{}. {}", argument.symbol(revision)?.to_string(), S::UPDATE);
+    add_program(ctl, &name, &content, revision)
 }
 
-pub fn remove_argument(ctl: &mut Control, argument: &symbols::Argument, revision: u32) -> Result {
-    let revision_name = format!("update_{revision}");
+pub fn add_attack<S: ArgumentationFrameworkSemantic>(
+    ctl: &mut Control,
+    attack: &symbols::Attack,
+    revision: u32,
+) -> Result {
+    let name = format!("update_{revision}");
+    let content = format!(r"{}. {}", attack.symbol(revision)?.to_string(), S::UPDATE);
+    add_program(ctl, &name, &content, revision)
+}
+
+pub fn remove_argument<S: ArgumentationFrameworkSemantic>(
+    ctl: &mut Control,
+    argument: &symbols::Argument,
+    revision: u32,
+) -> Result {
+    let name = format!("update_{revision}");
     let content = format!(
-        "{}.",
-        symbols::Delete(argument).symbol(revision)?.to_string()
+        "{}. {}",
+        symbols::Delete(argument).symbol(revision)?.to_string(),
+        S::UPDATE
     );
-    log::trace!("Adding program {revision_name} with {content:?}");
-    ctl.add(&revision_name, &[], &content)?;
-    // Re-Ground
-    ground(ctl, revision)?;
-    Ok(())
+    add_program(ctl, &name, &content, revision)
 }
 
-pub fn remove_attack(ctl: &mut Control, attack: &symbols::Attack, revision: u32) -> Result {
-    let revision_name = format!("update_{revision}");
-    let content = format!("{}.", symbols::Delete(attack).symbol(revision)?.to_string());
-    log::trace!("Adding program {revision_name} with {content:?}");
-    ctl.add(&revision_name, &[], &content)?;
-    // Re-Ground
-    ground(ctl, revision)?;
-    Ok(())
+pub fn remove_attack<S: ArgumentationFrameworkSemantic>(
+    ctl: &mut Control,
+    attack: &symbols::Attack,
+    revision: u32,
+) -> Result {
+    let name = format!("update_{revision}");
+    let content = format!(
+        "{}. {}",
+        symbols::Delete(attack).symbol(revision)?.to_string(),
+        S::UPDATE
+    );
+    add_program(ctl, &name, &content, revision)
 }

@@ -136,24 +136,17 @@ pub struct Extension {
 impl Extension {
     /// The empty extension
     pub const EMPTY: Extension = crate::macros::ext!();
-    pub fn from_model(model: &::clingo::Model, revision: u32) -> Result<Self> {
+    pub fn from_model(model: &::clingo::Model, _revision: u32) -> Result<Self> {
+        log::trace!("Converting clingo model to extension");
         let atoms = fallible_iterator::convert(
             model
                 .symbols(ShowType::SHOWN)?
                 .iter()
+                .inspect(|symbol| log::trace!("Raw symbol in model: {:?}", symbol.to_string()))
                 .map(Result::<_, Error>::Ok),
         )
-        .inspect(|symbol| Ok(log::info!("Found shown symbol: {}", symbol.to_string())))
-        .filter(|symbol| Ok(symbol.name()? == "in"))
-        .map(|symbol| {
-            // We just want the insides!
-            let args = symbol.arguments()?;
-            let rev = args[1].number()?;
-            let symbol = args[0].string()?;
-            Ok((symbol, rev))
-        })
-        .filter(|(_, rev)| Ok(*rev == revision as i32))
-        .map(|(symbol, _)| Ok(symbol.trim_matches('"').to_owned()))
+        .map(|symbol| Ok(symbol.to_string()))
+        .map(|symbol| Ok(symbol.trim_matches('"').to_owned()))
         .map(|name| Ok(symbols::Argument(name)))
         .collect()?;
         Ok(Extension { atoms })
@@ -165,7 +158,7 @@ impl<S: ArgumentationFrameworkSemantic> ArgumentationFramework<S> {
         // We need to make sure clingo stays uptodate, but only if it's initialized
         let revision = self.revision();
         if let Some(ctl) = self.clingo_ctl.as_mut() {
-            clingo::add_argument(ctl, &argument, revision)?;
+            clingo::add_argument::<S>(ctl, &argument, revision)?;
         }
         // Push the argument to our list of arguments
         self.args.push(argument);
@@ -179,7 +172,7 @@ impl<S: ArgumentationFrameworkSemantic> ArgumentationFramework<S> {
             let revision = self.revision();
             if let Some(ctl) = self.clingo_ctl.as_mut() {
                 // Disable the external symbol for this argument
-                clingo::remove_argument(ctl, &argument, revision)?;
+                clingo::remove_argument::<S>(ctl, &argument, revision)?;
             }
             Ok(Some(self.args.swap_remove(idx)))
         } else {
@@ -191,7 +184,7 @@ impl<S: ArgumentationFrameworkSemantic> ArgumentationFramework<S> {
         let revision = self.revision();
         log::trace!("Adding attack {attack:?} in revision {revision}");
         if let Some(ctl) = self.clingo_ctl.as_mut() {
-            clingo::add_attack(ctl, &attack, revision)?;
+            clingo::add_attack::<S>(ctl, &attack, revision)?;
         }
         self.attacks.push(attack);
         Ok(())
@@ -201,7 +194,7 @@ impl<S: ArgumentationFrameworkSemantic> ArgumentationFramework<S> {
             let revision = self.revision();
             if let Some(ctl) = self.clingo_ctl.as_mut() {
                 // Disable the external symbol for this attack
-                clingo::remove_attack(ctl, &attack, revision)?;
+                clingo::remove_attack::<S>(ctl, &attack, revision)?;
             }
             Ok(Some(self.attacks.swap_remove(idx)))
         } else {
@@ -231,6 +224,7 @@ impl<S: ArgumentationFrameworkSemantic> Framework for ArgumentationFramework<S> 
     type ExtensionIter = ExtensionIter;
 
     fn enumerate_extensions(&mut self) -> Result<IterGuard<'_, Self>> {
+        log::trace!("Solving.. enumerating extensions");
         let ctl = self.clingo_ctl.take().expect("Clingo control initialized");
         let handle = ctl.solve(SolveMode::YIELD, &[])?;
         Ok(IterGuard::new(
@@ -289,16 +283,52 @@ impl GenericExtension for Extension {
     }
 }
 
+fn print_model(model: &::clingo::Model) {
+    // get model type
+    let model_type = model.model_type().unwrap();
+
+    let type_string = match model_type {
+        ::clingo::ModelType::StableModel => "Stable model",
+        ::clingo::ModelType::BraveConsequences => "Brave consequences",
+        ::clingo::ModelType::CautiousConsequences => "Cautious consequences",
+    };
+
+    // get running number of model
+    let number = model.number().unwrap();
+
+    log::trace!("== {}: {}", type_string, number);
+
+    fn print(model: &::clingo::Model, label: &str, show: ShowType) {
+        // retrieve the symbols in the model
+        let atoms = model
+            .symbols(show)
+            .expect("Failed to retrieve symbols in the model.")
+            .iter()
+            .fold(String::new(), |line, atom| line + " " + &atom.to_string());
+        log::trace!("{label}: {atoms}");
+    }
+
+    print(model, "--  shown", ShowType::SHOWN);
+    print(model, "--  atoms", ShowType::ATOMS);
+    print(model, "--  terms", ShowType::TERMS);
+    print(model, "-- ~atoms", ShowType::COMPLEMENT | ShowType::ATOMS);
+}
+
 impl FallibleIterator for ExtensionIter {
     type Item = Extension;
     type Error = Error;
 
     fn next(&mut self) -> Result<Option<Self::Item>> {
+        log::trace!("Fetching next extension from iterator");
         if let Err(why) = self.handle.resume() {
+            log::warn!("Error while resuming solving");
             return Err(why.into());
         }
         match self.handle.model().map_err(crate::Error::from) {
-            Ok(Some(model)) => Some(Extension::from_model(model, self.revision)).transpose(),
+            Ok(Some(model)) => {
+                print_model(&model);
+                Some(Extension::from_model(model, self.revision)).transpose()
+            }
             Ok(None) => Ok(None),
             Err(why) => Err(why),
         }

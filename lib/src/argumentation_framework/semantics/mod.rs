@@ -67,8 +67,8 @@ impl ArgumentationFrameworkSemantic for crate::semantics::Admissible {
         % All arguments x \in S need to be defended by S
         :- in(X, revision), not_defended(X, revision).
     "#;
-    const BASE: &'static str = "#show. #show in/2.";
-    const UPDATE: &'static str = "";
+    const BASE: &'static str = "#show. #show X : in(X, 0).";
+    const UPDATE: &'static str = "#show. #show X : in(X, revision).";
 }
 
 impl_program!(crate::semantics::Complete, "./complete.dl");

@@ -32,6 +32,12 @@
 
         '';
       };
+    runBin = pkgs: name: bin: mode: pkgs.writeShellApplication {
+      inherit name;
+      text = ''
+        ${pkgs.cargo}/bin/cargo run --profile ${mode} --bin ${bin} -- "$@"
+      '';
+    };
   in
     (inputs.nixCargoIntegration.lib.makeOutputs {
       root = ./.;
@@ -52,6 +58,10 @@
             inputs.dev.packages.x86_64-linux.mdpls
             (clingoFixed common.pkgs)
             (bench common.pkgs)
+            (runBin common.pkgs "dasp-" "cli" "release")
+            (runBin common.pkgs "dasp" "cli" "dev")
+            (runBin common.pkgs "gen-" "af-generator" "release")
+            (runBin common.pkgs "gen" "af-generator" "dev")
           ];
           env = [
             {
