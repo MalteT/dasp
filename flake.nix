@@ -117,6 +117,12 @@
         lib.overrides.fixClingoLinking = {
           buildInputs = [(clingoFixed common.pkgs)];
         };
+        cli-iccma.depsOverrides.fixClingoSysBuild = {
+          CLINGO_LIBRARY_PATH = "${clingoFixed common.pkgs}/lib";
+        };
+        cli-iccma.overrides.fixClingoLinking = {
+          buildInputs = [(clingoFixed common.pkgs)];
+        };
       };
     })
     // {
