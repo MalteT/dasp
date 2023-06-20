@@ -10,4 +10,8 @@ pub enum Error {
     Clingo(#[from] ::clingo::ClingoError),
     #[error("parser error")]
     Parser(#[from] crate::framework::ParserError),
+    #[error("logic error: {0}")]
+    Logic(String),
+    #[error("bug: clingo backend not initialized")]
+    ClingoNotInitialized,
 }

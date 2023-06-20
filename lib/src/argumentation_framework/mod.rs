@@ -1,8 +1,8 @@
 //! Solver for Dung's Argumentation Frameworks.
-use std::{collections::BTreeSet, marker::PhantomData};
+use std::{collections::BTreeSet, marker::PhantomData, sync::atomic::AtomicUsize};
 
 use crate::{Error, Result};
-use ::clingo::{defaults::Non, ShowType, SolveMode};
+use ::clingo::{defaults::Non, ShowType, SolveMode, ToSymbol};
 use fallible_iterator::FallibleIterator;
 
 use self::{clingo::Logger, parser::parse_apx_tgf, semantics::ArgumentationFrameworkSemantic};
@@ -11,6 +11,20 @@ use crate::{
     framework::{GenericExtension, IterGuard},
     Framework,
 };
+
+pub static ID_COUNTER: Counter = Counter::new();
+
+pub struct Counter(AtomicUsize);
+
+impl Counter {
+    const fn new() -> Self {
+        Self(AtomicUsize::new(0))
+    }
+
+    pub fn next(&self) -> usize {
+        self.0.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+    }
+}
 
 pub type ArgumentID = String;
 type Control = ::clingo::GenericControl<clingo::Logger, Non, Non, Non>;
@@ -48,11 +62,7 @@ mod tests;
 ///     .collect::<BTreeSet<_>>();
 /// ```
 pub struct ArgumentationFramework<S: ArgumentationFrameworkSemantic> {
-    pub args: Vec<symbols::Argument>,
-    pub attacks: Vec<symbols::Attack>,
     clingo_ctl: Option<Control>,
-    // The update revision we'll use for the next change
-    next_revision: u32,
     _initial_file: String,
     _semantics: PhantomData<S>,
 }
@@ -61,13 +71,13 @@ pub struct ArgumentationFramework<S: ArgumentationFrameworkSemantic> {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Patch {
     /// Add an additional argument
-    AddArgument(symbols::Argument),
+    EnableArgument(symbols::Argument),
     /// Delete this argument
-    RemoveArgument(symbols::Argument),
+    DisableArgument(symbols::Argument),
     /// Add an additional attack
-    AddAttack(symbols::Attack),
+    EnableAttack(symbols::Attack),
     /// Delete this attack
-    RemoveAttack(symbols::Attack),
+    DisableAttack(symbols::Attack),
 }
 
 impl Patch {
@@ -76,14 +86,14 @@ impl Patch {
     /// # Example
     ///
     /// ```
-    /// # use lib::argumentation_framework::{symbols::{Argument, Attack, RevisionedSymbol}, Patch};
+    /// # use lib::argumentation_framework::{symbols::{Argument, Attack}, Patch};
     /// let patches = Patch::parse_line("+arg(a4):att(a4, a1):att(a2, a4).").unwrap();
     /// assert_eq!(
     ///    patches,
     ///    vec![
-    ///        Patch::AddArgument(Argument(String::from("a4"))),
-    ///        Patch::AddAttack(Attack(String::from("a4"), String::from("a1"))),
-    ///        Patch::AddAttack(Attack(String::from("a2"), String::from("a4"))),
+    ///        Patch::EnableArgument(Argument::new("a4", false)),
+    ///        Patch::EnableAttack(Attack::new("a4", "a1", false)),
+    ///        Patch::EnableAttack(Attack::new("a2", "a4", false)),
     ///    ]
     /// );
     ///
@@ -91,7 +101,7 @@ impl Patch {
     /// assert_eq!(
     ///     patches,
     ///     vec![
-    ///         Patch::AddAttack(Attack(String::from("a1"), String::from("a3"))),
+    ///         Patch::EnableAttack(Attack::new("a1","a3", false)),
     ///     ]
     /// );
     ///
@@ -99,7 +109,7 @@ impl Patch {
     /// assert_eq!(
     ///     patches,
     ///     vec![
-    ///         Patch::RemoveAttack(Attack(String::from("a2"), String::from("a1"))),
+    ///         Patch::DisableAttack(Attack::new("a2", "a1", false)),
     ///     ]
     /// );
     ///
@@ -107,7 +117,7 @@ impl Patch {
     /// assert_eq!(
     ///     patches,
     ///     vec![
-    ///         Patch::RemoveArgument(Argument(String::from("a3"))),
+    ///         Patch::DisableArgument(Argument::new("a3", false)),
     ///     ]
     /// );
     /// ```
@@ -123,7 +133,6 @@ impl Patch {
 /// to recycle the handle and turn it back into the [`::clingo::GenericControl`]
 pub struct ExtensionIter {
     handle: ::clingo::GenericSolveHandle<Logger, Non, Non, Non, Non>,
-    revision: u32,
 }
 
 /// An extension of an [`ArgumentationFramework`].
@@ -136,7 +145,7 @@ pub struct Extension {
 impl Extension {
     /// The empty extension
     pub const EMPTY: Extension = crate::macros::ext!();
-    pub fn from_model(model: &::clingo::Model, _revision: u32) -> Result<Self> {
+    pub fn from_model(model: &::clingo::Model) -> Result<Self> {
         log::trace!("Converting clingo model to extension");
         let atoms = fallible_iterator::convert(
             model
@@ -147,75 +156,81 @@ impl Extension {
         )
         .map(|symbol| Ok(symbol.to_string()))
         .map(|symbol| Ok(symbol.trim_matches('"').to_owned()))
-        .map(|name| Ok(symbols::Argument(name)))
+        .map(|name| {
+            Ok(symbols::Argument {
+                id: name,
+                optional: false,
+            })
+        })
         .collect()?;
         Ok(Extension { atoms })
     }
 }
 
 impl<S: ArgumentationFrameworkSemantic> ArgumentationFramework<S> {
-    pub fn add_argument(&mut self, argument: symbols::Argument) -> Result {
-        // We need to make sure clingo stays uptodate, but only if it's initialized
-        let revision = self.revision();
-        if let Some(ctl) = self.clingo_ctl.as_mut() {
-            clingo::add_argument::<S>(ctl, &argument, revision)?;
-        }
-        // Push the argument to our list of arguments
-        self.args.push(argument);
-        Ok(())
-    }
-    pub fn remove_argument(
-        &mut self,
-        argument: &symbols::Argument,
-    ) -> Result<Option<symbols::Argument>> {
-        if let Some(idx) = self.args.iter().position(|a| a == argument) {
-            let revision = self.revision();
-            if let Some(ctl) = self.clingo_ctl.as_mut() {
-                // Disable the external symbol for this argument
-                clingo::remove_argument::<S>(ctl, &argument, revision)?;
-            }
-            Ok(Some(self.args.swap_remove(idx)))
-        } else {
-            Ok(None)
-        }
-    }
-    pub fn add_attack(&mut self, attack: symbols::Attack) -> Result {
-        // Make sure to keep clingo uptodate
-        let revision = self.revision();
-        log::trace!("Adding attack {attack:?} in revision {revision}");
-        if let Some(ctl) = self.clingo_ctl.as_mut() {
-            clingo::add_attack::<S>(ctl, &attack, revision)?;
-        }
-        self.attacks.push(attack);
-        Ok(())
-    }
-    pub fn remove_attack(&mut self, attack: &symbols::Attack) -> Result<Option<symbols::Attack>> {
-        if let Some(idx) = self.attacks.iter().position(|a| a == attack) {
-            let revision = self.revision();
-            if let Some(ctl) = self.clingo_ctl.as_mut() {
-                // Disable the external symbol for this attack
-                clingo::remove_attack::<S>(ctl, &attack, revision)?;
-            }
-            Ok(Some(self.attacks.swap_remove(idx)))
-        } else {
-            Ok(None)
-        }
-    }
-    /// Apply the given patch to the argumentation framework.
-    pub fn apply_patch(&mut self, patch: Patch) -> Result {
+    pub fn apply_patch(&mut self, patch: &Patch) -> Result {
         log::trace!("Applying patch {patch:?}");
         match patch {
-            Patch::AddArgument(arg) => self.add_argument(arg),
-            Patch::RemoveArgument(arg) => self.remove_argument(&arg).map(|_| ()),
-
-            Patch::AddAttack(att) => self.add_attack(att),
-            Patch::RemoveAttack(att) => self.remove_attack(&att).map(|_| ()),
+            Patch::EnableArgument(argument) => self.enable_argument(argument),
+            Patch::DisableArgument(argument) => self.disable_argument(argument),
+            Patch::EnableAttack(attack) => self.enable_attack(attack),
+            Patch::DisableAttack(attack) => self.disable_attack(attack),
         }
     }
-    fn revision(&mut self) -> u32 {
-        let rev = self.next_revision;
-        self.next_revision += 1;
-        rev
+    pub fn enable_argument(&mut self, argument: &symbols::Argument) -> Result {
+        let symbol_needle = argument.symbol()?;
+        let target = self
+            .assume_control()?
+            .symbolic_atoms()?
+            .iter()?
+            .try_find(|x| Result::<_, ::clingo::ClingoError>::Ok(x.symbol()? == symbol_needle))?
+            .ok_or(Error::Logic(format!(
+                "The argument {symbol_needle} was not defined as optional and cannot be enabled now"
+            )))?;
+        clingo::enable_argument(self.assume_control()?, target.literal()?)?;
+        Ok(())
+    }
+    pub fn disable_argument(&mut self, argument: &symbols::Argument) -> Result {
+        let symbol_needle = argument.symbol()?;
+        let target = self
+            .assume_control()?
+            .symbolic_atoms()?
+            .iter()?
+            .try_find(|x| Result::<_, ::clingo::ClingoError>::Ok(x.symbol()? == symbol_needle))?
+            .ok_or(Error::Logic(format!(
+                "The argument {symbol_needle} was not defined as optional and cannot be disabled now"
+            )))?;
+        clingo::disable_argument(self.assume_control()?, target.literal()?)?;
+        Ok(())
+    }
+    pub fn enable_attack(&mut self, attack: &symbols::Attack) -> Result {
+        let symbol_needle = attack.symbol()?;
+        let target = self
+            .assume_control()?
+            .symbolic_atoms()?
+            .iter()?
+            .try_find(|x| Result::<_, ::clingo::ClingoError>::Ok(x.symbol()? == symbol_needle))?
+            .ok_or(Error::Logic(format!(
+                "The attack {symbol_needle} was not defined as optional and cannot be enabled now"
+            )))?;
+        clingo::enable_attack(self.assume_control()?, target.literal()?)?;
+        Ok(())
+    }
+    pub fn disable_attack(&mut self, attack: &symbols::Attack) -> Result {
+        let symbol_needle = attack.symbol()?;
+        let target = self
+            .assume_control()?
+            .symbolic_atoms()?
+            .iter()?
+            .try_find(|x| Result::<_, ::clingo::ClingoError>::Ok(x.symbol()? == symbol_needle))?
+            .ok_or(Error::Logic(format!(
+                "The attack {symbol_needle} was not defined as optional and cannot be disabled now"
+            )))?;
+        clingo::disable_attack(self.assume_control()?, target.literal()?)?;
+        Ok(())
+    }
+    fn assume_control(&mut self) -> Result<&mut Control> {
+        self.clingo_ctl.as_mut().ok_or(Error::ClingoNotInitialized)
     }
 }
 
@@ -227,22 +242,13 @@ impl<S: ArgumentationFrameworkSemantic> Framework for ArgumentationFramework<S> 
         log::trace!("Solving.. enumerating extensions");
         let ctl = self.clingo_ctl.take().expect("Clingo control initialized");
         let handle = ctl.solve(SolveMode::YIELD, &[])?;
-        Ok(IterGuard::new(
-            self,
-            ExtensionIter {
-                revision: self.next_revision - 1,
-                handle,
-            },
-        ))
+        Ok(IterGuard::new(self, ExtensionIter { handle }))
     }
 
     fn new(input: &str) -> Result<Self> {
         let (args, attacks) = parse_apx_tgf(input)?;
         let clingo_ctl = clingo::initialize_backend::<S>(&args, &attacks)?;
         Ok(ArgumentationFramework {
-            args,
-            attacks,
-            next_revision: 1,
             _semantics: PhantomData,
             _initial_file: input.to_owned(),
             clingo_ctl: Some(clingo_ctl),
@@ -255,7 +261,7 @@ impl<S: ArgumentationFrameworkSemantic> Framework for ArgumentationFramework<S> 
                 .into_iter()
                 .map(Ok),
         )
-        .for_each(|patch| self.apply_patch(patch))
+        .for_each(|patch| self.apply_patch(&patch))
     }
 
     fn drop_extension_iter(&mut self, iter: Self::ExtensionIter) -> Result<()> {
@@ -276,7 +282,7 @@ impl GenericExtension for Extension {
             + &self
                 .atoms
                 .iter()
-                .map(|atom| atom.0.clone())
+                .map(|atom| atom.id.clone())
                 .reduce(|acc, atom| format!("{acc},{atom}"))
                 .unwrap_or_default()
             + "]"
@@ -326,8 +332,8 @@ impl FallibleIterator for ExtensionIter {
         }
         match self.handle.model().map_err(crate::Error::from) {
             Ok(Some(model)) => {
-                print_model(&model);
-                Some(Extension::from_model(model, self.revision)).transpose()
+                print_model(model);
+                Some(Extension::from_model(model)).transpose()
             }
             Ok(None) => Ok(None),
             Err(why) => Err(why),
@@ -338,7 +344,13 @@ impl FallibleIterator for ExtensionIter {
 impl FromIterator<ArgumentID> for Extension {
     fn from_iter<T: IntoIterator<Item = ArgumentID>>(iter: T) -> Self {
         Self {
-            atoms: iter.into_iter().map(symbols::Argument).collect(),
+            atoms: iter
+                .into_iter()
+                .map(|id| symbols::Argument {
+                    id,
+                    optional: false,
+                })
+                .collect(),
         }
     }
 }

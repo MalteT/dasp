@@ -12,7 +12,8 @@ macro_rules! semantics {
     };
 }
 
-semantics!(Complete);
-semantics!(Stable);
-semantics!(Ground);
 semantics!(Admissible);
+semantics!(Complete);
+semantics!(ConflictFree);
+semantics!(Ground);
+semantics!(Stable);

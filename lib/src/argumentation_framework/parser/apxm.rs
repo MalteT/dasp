@@ -10,6 +10,8 @@ pub enum Token {
     Arg,
     #[token("att")]
     Attack,
+    #[token("opt")]
+    Optional,
     #[token("(")]
     LeftParen,
     #[token(")")]
@@ -40,14 +42,14 @@ enum AddDel {
 impl AddDel {
     fn arg(&self, arg: symbols::Argument) -> Patch {
         match self {
-            Self::Add => Patch::AddArgument(arg),
-            Self::Del => Patch::RemoveArgument(arg),
+            Self::Add => Patch::EnableArgument(arg),
+            Self::Del => Patch::DisableArgument(arg),
         }
     }
     fn att(&self, att: symbols::Attack) -> Patch {
         match self {
-            Self::Add => Patch::AddAttack(att),
-            Self::Del => Patch::RemoveAttack(att),
+            Self::Add => Patch::EnableAttack(att),
+            Self::Del => Patch::DisableAttack(att),
         }
     }
 }
@@ -116,7 +118,11 @@ fn parse_att_tuple(lex: &mut Lexer<Token>) -> ParserResult<symbols::Attack> {
     expect(lex, Token::Text)?;
     let to = lex.slice().to_owned();
     expect(lex, Token::RightParen)?;
-    Ok(symbols::Attack(from, to))
+    Ok(symbols::Attack {
+        from,
+        to,
+        optional: false,
+    })
 }
 
 fn parse_arg_singleton(lex: &mut Lexer<Token>) -> ParserResult<symbols::Argument> {
@@ -124,7 +130,10 @@ fn parse_arg_singleton(lex: &mut Lexer<Token>) -> ParserResult<symbols::Argument
     expect(lex, Token::Text)?;
     let id = lex.slice().to_owned();
     expect(lex, Token::RightParen)?;
-    Ok(symbols::Argument(id))
+    Ok(symbols::Argument {
+        id,
+        optional: false,
+    })
 }
 
 fn parse_add_del(lex: &mut Lexer<Token>) -> ParserResult<AddDel> {
@@ -152,22 +161,22 @@ mod tests {
     #[test]
     fn basic_updates() {
         let patches = parse_line("+att(a1,a3).").unwrap();
-        assert_eq!(patches, vec![Patch::AddAttack(att!("a1", "a3"))]);
+        assert_eq!(patches, vec![Patch::EnableAttack(att!("a1", "a3"))]);
 
         let patches = parse_line("-att(a2, a1).").unwrap();
-        assert_eq!(patches, vec![Patch::RemoveAttack(att!("a2", "a1"))]);
+        assert_eq!(patches, vec![Patch::DisableAttack(att!("a2", "a1"))]);
 
         let patches = parse_line("+arg(a4):att(a4, a1):att(a2,a4).").unwrap();
         assert_eq!(
             patches,
             vec![
-                Patch::AddArgument(arg!("a4")),
-                Patch::AddAttack(att!("a4", "a1")),
-                Patch::AddAttack(att!("a2", "a4"))
+                Patch::EnableArgument(arg!("a4")),
+                Patch::EnableAttack(att!("a4", "a1")),
+                Patch::EnableAttack(att!("a2", "a4"))
             ]
         );
 
         let patches = parse_line("-arg(a3).").unwrap();
-        assert_eq!(patches, vec![Patch::RemoveArgument(arg!("a3"))]);
+        assert_eq!(patches, vec![Patch::DisableArgument(arg!("a3"))]);
     }
 }

@@ -2,7 +2,7 @@ use pretty_assertions::assert_eq;
 
 use crate::{
     macros::{ext, set},
-    semantics::{Admissible, Complete, Ground, Stable},
+    semantics::{Admissible, Complete, ConflictFree, Ground, Stable},
 };
 
 use super::*;
@@ -45,17 +45,17 @@ fn the_empty_af() {
 fn simple_admissible_af() {
     let extensions = extensions::<Admissible>(
         r#"
-            arg(1).
-            arg(2).
-            arg(3).
-            att(1, 3).
-            att(2, 3).
-            att(3, 2).
+            arg(a1).
+            arg(a2).
+            arg(a3).
+            att(a1, a3).
+            att(a2, a3).
+            att(a3, a2).
         "#,
     );
     assert_eq!(
         extensions,
-        set![Extension::EMPTY, ext!("1"), ext!("2"), ext!("1", "2")]
+        set![Extension::EMPTY, ext!("a1"), ext!("a2"), ext!("a1", "a2")]
     )
 }
 
@@ -157,63 +157,300 @@ fn update_admissible_af() {
         r#"
             arg(alpha).
             arg(beta).
+
             att(alpha, beta).
+            opt(att(alpha, beta)).
+
+            att(alpha, alpha).
+            opt(att(alpha, alpha)).
         "#,
     )
     .expect("Creating AF");
+    // Enable alpha->beta by default
+    af.update("+att(alpha, beta).")
+        .expect("Enable attack alpha->beta");
     let exts = extensions_of(&mut af);
     assert_eq!(exts, set![ext!(), ext!("alpha")]);
 
     af.update("+att(alpha, alpha).")
-        .expect("Added attack to AF");
+        .expect("Enable attack alpha->alpha");
     let exts = extensions_of(&mut af);
     assert_eq!(exts, set![ext!()]);
 
     af.update("-att(alpha, beta).")
-        .expect("Removed attack from AF");
+        .expect("Disable attack from AF");
     let exts = extensions_of(&mut af);
     assert_eq!(exts, set![ext!(), ext!("beta")]);
 }
 
 #[test]
-fn re_adding_arguments_in_admissible_af() {
+fn re_enabling_arguments_in_admissible_af() {
     let mut af = ArgumentationFramework::<Admissible>::new(
         r#"
-            arg(1).
-            arg(2).
+            arg(a1).
+            arg(a2).
+
+            opt(arg(a1)).
         "#,
     )
     .expect("Creating AF");
+    // Enable arg(1) by default
+    af.update("+arg(a1).").expect("Enable argument a1");
     let exts = extensions_of(&mut af);
-    assert_eq!(exts, set![ext!(), ext!("1"), ext!("2"), ext!("1", "2")]);
+    assert_eq!(exts, set![ext!(), ext!("a1"), ext!("a2"), ext!("a1", "a2")]);
 
-    af.update("-arg(1).").expect("Remove argument 1");
+    af.update("-arg(a1).").expect("Disable argument 1");
     let exts = extensions_of(&mut af);
-    assert_eq!(exts, set![ext!(), ext!("2")]);
+    assert_eq!(exts, set![ext!(), ext!("a2")]);
 
-    af.update("+arg(1).").expect("Re-Add argument 1");
+    af.update("+arg(a1).").expect("Re-Enable argument 1");
     let exts = extensions_of(&mut af);
-    assert_eq!(exts, set![ext!(), ext!("1"), ext!("2"), ext!("1", "2")]);
+    assert_eq!(exts, set![ext!(), ext!("a1"), ext!("a2"), ext!("a1", "a2")]);
 }
 
 #[test]
-fn re_adding_attacks_in_admissible_af() {
+fn re_enabling_attacks_in_admissible_af() {
     let mut af = ArgumentationFramework::<Admissible>::new(
         r#"
-            arg(1).
-            arg(2).
-            att(1, 2).
+            arg(a1).
+            arg(a2).
+
+            att(a1, a2).
+            opt(att(a1, a2)).
         "#,
     )
     .expect("Creating AF");
+    // Enable a1->a2 by default
+    af.update("+att(a1, a2).")
+        .expect("Enable attack from a1 to a2");
     let exts = extensions_of(&mut af);
-    assert_eq!(exts, set![ext!(), ext!("1")]);
+    assert_eq!(exts, set![ext!(), ext!("a1")]);
 
-    af.update("-att(1, 2).").expect("Remove attack from 1 to 2");
+    af.update("-att(a1, a2).")
+        .expect("Disable attack from a1 to a2");
     let exts = extensions_of(&mut af);
-    assert_eq!(exts, set![ext!(), ext!("1"), ext!("2"), ext!("1", "2")]);
+    assert_eq!(exts, set![ext!(), ext!("a1"), ext!("a2"), ext!("a1", "a2")]);
 
-    af.update("+att(1, 2).").expect("Re-Add attack from 1 to 2");
+    af.update("+att(a1, a2).")
+        .expect("Re-Enable attack from a1 to a2");
     let exts = extensions_of(&mut af);
-    assert_eq!(exts, set![ext!(), ext!("1")]);
+    assert_eq!(exts, set![ext!(), ext!("a1")]);
+}
+
+#[test]
+fn enabling_arguments_in_admissible_afs() {
+    let mut af = ArgumentationFramework::<Admissible>::new(
+        r#"
+            arg(a).
+            opt(arg(a)).
+
+            arg(b).
+            opt(arg(b)).
+        "#,
+    )
+    .expect("Creating AF");
+    assert_eq!(extensions_of(&mut af), set![ext!()]);
+    af.update("+arg(a).").expect("Enable argument a");
+    assert_eq!(extensions_of(&mut af), set![ext!(), ext!("a")]);
+    af.update("+arg(b).").expect("Enable argument b");
+    assert_eq!(
+        extensions_of(&mut af),
+        set![ext!(), ext!("a"), ext!("b"), ext!("a", "b")]
+    );
+
+    let mut af = ArgumentationFramework::<Admissible>::new(
+        r#"
+            arg(a).
+            arg(b).
+            att(a, b).
+
+            arg(c).
+            opt(arg(c)).
+        "#,
+    )
+    .expect("Creating AF");
+    assert_eq!(extensions_of(&mut af), set![ext!(), ext!("a")]);
+    af.update("+arg(c).").expect("Enable argument c");
+    assert_eq!(
+        extensions_of(&mut af),
+        set![ext!(), ext!("a"), ext!("c"), ext!("a", "c")]
+    );
+}
+
+#[test]
+fn enabling_attacks_in_admissible_afs() {
+    let mut af = ArgumentationFramework::<Admissible>::new(
+        r#"
+            arg(a).
+            arg(b).
+
+            att(b, a).
+            opt(att(b, a)).
+
+            att(a, b).
+            opt(att(a, b)).
+        "#,
+    )
+    .expect("Creating AF");
+    assert_eq!(
+        extensions_of(&mut af),
+        set![ext!(), ext!("a"), ext!("b"), ext!("a", "b")]
+    );
+    af.update("+att(b, a).").expect("Enable attack from b to a");
+    assert_eq!(extensions_of(&mut af), set![ext!(), ext!("b")]);
+    af.update("+att(a, b).").expect("Enable attack from a to b");
+    assert_eq!(extensions_of(&mut af), set![ext!(), ext!("a"), ext!("b")]);
+}
+
+#[test]
+fn enabling_arguments_and_attacks_in_admissible_afs() {
+    let mut af = ArgumentationFramework::<Admissible>::new(
+        r#"
+            arg(a).
+            opt(arg(a)).
+
+            arg(b).
+            opt(arg(b)).
+
+            att(a, b).
+            opt(att(a, b)).
+
+            att(b, a).
+            opt(att(b, a)).
+
+            arg(c).
+            opt(arg(c)).
+
+            att(c, a).
+            opt(att(c, a)).
+        "#,
+    )
+    .expect("Creating AF");
+    assert_eq!(extensions_of(&mut af), set![ext!()]);
+    af.update("+arg(a).").expect("Enable argument a");
+    assert_eq!(extensions_of(&mut af), set![ext!(), ext!("a")]);
+    af.update("+arg(b).").expect("Enable argument b");
+    assert_eq!(
+        extensions_of(&mut af),
+        set![ext!(), ext!("a"), ext!("b"), ext!("a", "b")]
+    );
+    af.update("+att(a, b).").expect("Enable attack from a to b");
+    assert_eq!(extensions_of(&mut af), set![ext!(), ext!("a")]);
+    af.update("+att(b, a).").expect("Enable attack from b to a");
+    assert_eq!(extensions_of(&mut af), set![ext!(), ext!("a"), ext!("b")]);
+
+    af.update("+arg(c).").expect("Enable argument c");
+    assert_eq!(
+        extensions_of(&mut af),
+        set![
+            ext!(),
+            ext!("a"),
+            ext!("b"),
+            ext!("c"),
+            ext!("a", "c"),
+            ext!("b", "c")
+        ]
+    );
+    af.update("+att(c, a).").expect("Enable attack from c to a");
+    assert_eq!(
+        extensions_of(&mut af),
+        set![ext!(), ext!("b"), ext!("c"), ext!("b", "c")]
+    );
+}
+
+#[test]
+fn simple_conflict_free_af() {
+    let mut af = ArgumentationFramework::<ConflictFree>::new(
+        r#"
+            arg(a).
+            arg(b).
+            att(a, b).
+        "#,
+    )
+    .expect("Creating AF");
+    assert_eq!(extensions_of(&mut af), set![ext!(), ext!("a"), ext!("b")]);
+}
+
+#[test]
+fn simple_conflict_free_af_with_enabling_arguments_and_attacks() {
+    let mut af = ArgumentationFramework::<ConflictFree>::new(
+        r#"
+            arg(a).
+            arg(b).
+            att(a, b).
+
+            att(b, a).
+            opt(att(b, a)).
+
+            arg(c).
+            opt(arg(c)).
+
+            att(c, a).
+            opt(att(c, a)).
+        "#,
+    )
+    .expect("Creating AF");
+    assert_eq!(extensions_of(&mut af), set![ext!(), ext!("a"), ext!("b")]);
+    af.update("+att(b, a).").expect("Enable attack from b to a");
+    assert_eq!(extensions_of(&mut af), set![ext!(), ext!("a"), ext!("b")]);
+    af.update("+arg(c).").expect("Enable argument c");
+    assert_eq!(
+        extensions_of(&mut af),
+        set![
+            ext!(),
+            ext!("a"),
+            ext!("b"),
+            ext!("c"),
+            ext!("a", "c"),
+            ext!("b", "c")
+        ]
+    );
+    af.update("+att(c, a).").expect("Enable attack from c to a");
+    assert_eq!(
+        extensions_of(&mut af),
+        set![ext!(), ext!("a"), ext!("b"), ext!("c"), ext!("b", "c")]
+    )
+}
+
+#[test]
+fn simple_conflict_free_af_with_general_updates() {
+    let mut af = ArgumentationFramework::<ConflictFree>::new(
+        r#"
+            arg(a).
+            arg(b).
+            arg(c).
+            att(a, b).
+            att(c, a).
+
+            opt(att(a, b)).
+            opt(arg(a)).
+        "#,
+    )
+    .expect("Creating AF");
+    // Enable a, and a->b by default
+    af.update("+att(a, b).")
+        .expect("Enabling attack from a to b");
+    af.update("+arg(a).").expect("Enabling argument a");
+    assert_eq!(
+        extensions_of(&mut af),
+        set![ext!(), ext!("a"), ext!("b"), ext!("c"), ext!("b", "c")]
+    );
+    af.update("-att(a, b).")
+        .expect("Removing attack from a to b");
+    assert_eq!(
+        extensions_of(&mut af),
+        set![
+            ext!(),
+            ext!("a"),
+            ext!("b"),
+            ext!("c"),
+            ext!("a", "b"),
+            ext!("b", "c")
+        ]
+    );
+    af.update("-arg(a).").expect("Removing argument a");
+    assert_eq!(
+        extensions_of(&mut af),
+        set![ext!(), ext!("b"), ext!("c"), ext!("b", "c")]
+    )
 }

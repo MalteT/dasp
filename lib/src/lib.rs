@@ -1,3 +1,4 @@
+#![feature(try_find)]
 pub mod argumentation_framework;
 mod error;
 pub mod framework;
@@ -56,16 +57,37 @@ mod macros {
 
     /// Create an argument for Dung's [`crate::argumentation_framework::ArgumentationFramework`]
     macro_rules! arg {
+        ($name:literal, $optional:literal) => {{
+            let optional: bool = $optional;
+            crate::argumentation_framework::symbols::Argument {
+                id: $name.into(),
+                optional,
+            }
+        }};
         ($name:literal) => {
-            crate::argumentation_framework::symbols::Argument($name.into())
+            arg!($name, false)
+        };
+        ($name:literal opt) => {
+            arg!($name, true)
         };
     }
     pub(crate) use arg;
 
     /// Create an attack for Dung's [`crate::argumentation_framework::ArgumentationFramework`]
     macro_rules! att {
+        ($from:literal, $to:literal, $optional:literal) => {{
+            let optional: bool = $optional;
+            crate::argumentation_framework::symbols::Attack {
+                from: $from.into(),
+                to: $to.into(),
+                optional,
+            }
+        }};
         ($from:literal, $to:literal) => {
-            crate::argumentation_framework::symbols::Attack($from.into(), $to.into())
+            att!($from, $to, false)
+        };
+        ($from:literal, $to:literal opt) => {
+            att!($from, $to, true)
         };
     }
     pub(crate) use att;

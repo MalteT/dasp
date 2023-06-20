@@ -1,11 +1,10 @@
-use ::clingo::{FactBase, Part};
-use clingo::Symbol;
+//! Main interface for communication between this library and clingo
+//!
 
-use super::{
-    semantics::ArgumentationFrameworkSemantic,
-    symbols::{self, RevisionedSymbol},
-    Control,
-};
+use ::clingo::Part;
+use clingo::SolverLiteral;
+
+use super::{semantics::ArgumentationFrameworkSemantic, symbols, Control};
 
 use crate::Result;
 
@@ -26,50 +25,45 @@ pub fn initialize_backend<S: ArgumentationFrameworkSemantic>(
 ) -> Result<Control> {
     let clingo_params = assemble_clingo_parameters();
     let mut ctl = ::clingo::control_with_logger(clingo_params, Logger, u32::MAX)?;
+    // Add the facts
+    let facts = args.iter().fold(String::new(), |acc, argument| {
+        if argument.optional {
+            acc + &format!(r#"#external argument({}). "#, argument.id)
+        } else {
+            acc + &format!(r#"argument({}). "#, argument.id)
+        }
+    });
+    let facts = attacks.iter().fold(facts, |acc, attack| {
+        if attack.optional {
+            acc + &format!(r#"#external attack({}, {}). "#, attack.from, attack.to)
+        } else {
+            acc + &format!(r#"attack({}, {}). "#, attack.from, attack.to)
+        }
+    });
+    ctl.add("facts", &[], &facts)?;
     // Add the base program
     ctl.add("base", &[], S::BASE)?;
-    // Add the configured theory
-    ctl.add("theory", &["revision"], S::THEORY)?;
-    // Add the initial arguments and attacks as facts
-    // TODO: What does it mean, is it adding the to the base?
-    ctl.add_facts(&create_factbase_from_args_and_attacks(args, attacks))?;
-    ground(&mut ctl, 0)?;
+    ctl.add(
+        "show",
+        &[],
+        r#"
+            #show.
+            #show X: in(X).
+        "#,
+    )?;
+    ground(&mut ctl)?;
     Ok(ctl)
 }
 
-fn ground(ctl: &mut Control, revision: u32) -> Result {
-    let parts = match revision {
-        0 => {
-            log::trace!("Grounding programs: base(), theory({revision})");
-            vec![
-                Part::new("base", vec![])?,
-                Part::new("theory", vec![Symbol::create_number(revision as i32)])?,
-            ]
-        }
-        1.. => {
-            log::trace!("Grounding programs: update_{revision}(), theory({revision})");
-            vec![
-                Part::new(&format!("update_{revision}"), vec![])?,
-                Part::new("theory", vec![Symbol::create_number(revision as i32)])?,
-            ]
-        }
-    };
+fn ground(ctl: &mut Control) -> Result {
+    log::trace!("Grounding programs: base(), show(), and facts()");
+    let parts = vec![
+        Part::new("base", vec![])?,
+        Part::new("show", vec![])?,
+        Part::new("facts", vec![])?,
+    ];
     ctl.ground(&parts)?;
     Ok(())
-}
-
-#[deprecated = "don't use factbase, create a base program instead for consistency with the rest of the code"]
-fn create_factbase_from_args_and_attacks(
-    args: &[symbols::Argument],
-    attacks: &[symbols::Attack],
-) -> FactBase {
-    let mut fb = FactBase::new();
-    args.iter()
-        .for_each(|arg| fb.insert(&arg.symbol(0).unwrap()));
-    attacks
-        .iter()
-        .for_each(|attack| fb.insert(&attack.symbol(0).unwrap()));
-    fb
 }
 
 fn assemble_clingo_parameters() -> Vec<String> {
@@ -88,59 +82,22 @@ fn assemble_clingo_parameters() -> Vec<String> {
     .collect()
 }
 
-fn add_program(ctl: &mut Control, name: &str, content: &str, revision: u32) -> Result {
-    // Add argument to update_{revision} program
-    log::trace!("Adding program {name:?} to clingo: {content:?}");
-    ctl.add(&name, &[], &content)?;
-    // Re-Ground
-    ground(ctl, revision)?;
+pub fn enable_argument(ctl: &mut Control, argument: SolverLiteral) -> Result {
+    ctl.assign_external(argument, clingo::TruthValue::True)?;
     Ok(())
 }
 
-pub fn add_argument<S: ArgumentationFrameworkSemantic>(
-    ctl: &mut Control,
-    argument: &symbols::Argument,
-    revision: u32,
-) -> Result {
-    let name = format!("update_{revision}");
-    let content = format!(r"{}. {}", argument.symbol(revision)?.to_string(), S::UPDATE);
-    add_program(ctl, &name, &content, revision)
+pub fn disable_argument(ctl: &mut Control, argument: SolverLiteral) -> Result {
+    ctl.assign_external(argument, clingo::TruthValue::False)?;
+    Ok(())
 }
 
-pub fn add_attack<S: ArgumentationFrameworkSemantic>(
-    ctl: &mut Control,
-    attack: &symbols::Attack,
-    revision: u32,
-) -> Result {
-    let name = format!("update_{revision}");
-    let content = format!(r"{}. {}", attack.symbol(revision)?.to_string(), S::UPDATE);
-    add_program(ctl, &name, &content, revision)
+pub fn enable_attack(ctl: &mut Control, attack: SolverLiteral) -> Result {
+    ctl.assign_external(attack, clingo::TruthValue::True)?;
+    Ok(())
 }
 
-pub fn remove_argument<S: ArgumentationFrameworkSemantic>(
-    ctl: &mut Control,
-    argument: &symbols::Argument,
-    revision: u32,
-) -> Result {
-    let name = format!("update_{revision}");
-    let content = format!(
-        "{}. {}",
-        symbols::Delete(argument).symbol(revision)?.to_string(),
-        S::UPDATE
-    );
-    add_program(ctl, &name, &content, revision)
-}
-
-pub fn remove_attack<S: ArgumentationFrameworkSemantic>(
-    ctl: &mut Control,
-    attack: &symbols::Attack,
-    revision: u32,
-) -> Result {
-    let name = format!("update_{revision}");
-    let content = format!(
-        "{}. {}",
-        symbols::Delete(attack).symbol(revision)?.to_string(),
-        S::UPDATE
-    );
-    add_program(ctl, &name, &content, revision)
+pub fn disable_attack(ctl: &mut Control, attack: SolverLiteral) -> Result {
+    ctl.assign_external(attack, clingo::TruthValue::False)?;
+    Ok(())
 }

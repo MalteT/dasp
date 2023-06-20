@@ -30,14 +30,14 @@ enum AddDel {
 impl AddDel {
     fn arg(&self, arg: symbols::Argument) -> Patch {
         match self {
-            Self::Add => Patch::AddArgument(arg),
-            Self::Del => Patch::RemoveArgument(arg),
+            Self::Add => Patch::EnableArgument(arg),
+            Self::Del => Patch::DisableArgument(arg),
         }
     }
     fn att(&self, att: symbols::Attack) -> Patch {
         match self {
-            Self::Add => Patch::AddAttack(att),
-            Self::Del => Patch::RemoveAttack(att),
+            Self::Add => Patch::EnableAttack(att),
+            Self::Del => Patch::DisableAttack(att),
         }
     }
 }
@@ -72,7 +72,11 @@ fn parse_patch(lex: &mut Lexer<Token>, add_del: AddDel) -> ParserResult<Patch> {
                     })
                 }
             }
-            Ok(add_del.att(symbols::Attack(arg.0, to.0)))
+            Ok(add_del.att(symbols::Attack {
+                from: arg.id,
+                to: to.id,
+                optional: false,
+            }))
         }
         Some(other) => Err(ParserError::UnexpectedToken {
             found: Box::from(other),
@@ -101,7 +105,10 @@ fn parse_add_del(lex: &mut Lexer<Token>) -> ParserResult<AddDel> {
 
 fn parse_argument(lex: &mut Lexer<Token>) -> ParserResult<symbols::Argument> {
     expect(lex, Token::Text)?;
-    Ok(symbols::Argument(lex.slice().into()))
+    Ok(symbols::Argument {
+        id: lex.slice().into(),
+        optional: false,
+    })
 }
 
 #[cfg(test)]
@@ -114,22 +121,22 @@ mod tests {
     #[test]
     fn simple_patches() {
         let patches = parse_line("+1 3").unwrap();
-        assert_eq!(patches, vec![Patch::AddAttack(att!("1", "3"))]);
+        assert_eq!(patches, vec![Patch::EnableAttack(att!("1", "3"))]);
 
         let patches = parse_line("-2 1").unwrap();
-        assert_eq!(patches, vec![Patch::RemoveAttack(att!("2", "1"))]);
+        assert_eq!(patches, vec![Patch::DisableAttack(att!("2", "1"))]);
 
         let patches = parse_line("+4:4 1:2 4").unwrap();
         assert_eq!(
             patches,
             vec![
-                Patch::AddArgument(arg!("4")),
-                Patch::AddAttack(att!("4", "1")),
-                Patch::AddAttack(att!("2", "4"))
+                Patch::EnableArgument(arg!("4")),
+                Patch::EnableAttack(att!("4", "1")),
+                Patch::EnableAttack(att!("2", "4"))
             ]
         );
 
         let patches = parse_line("-3").unwrap();
-        assert_eq!(patches, vec![Patch::RemoveArgument(arg!("3"))]);
+        assert_eq!(patches, vec![Patch::DisableArgument(arg!("3"))]);
     }
 }

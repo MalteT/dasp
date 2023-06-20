@@ -32,12 +32,35 @@
 
         '';
       };
-    runBin = pkgs: name: bin: mode: pkgs.writeShellApplication {
-      inherit name;
-      text = ''
-        ${pkgs.cargo}/bin/cargo run --profile ${mode} --bin ${bin} -- "$@"
-      '';
-    };
+    runBin = pkgs: name: bin: mode:
+      pkgs.writeShellApplication {
+        inherit name;
+        text = ''
+          ${pkgs.cargo}/bin/cargo run --profile ${mode} --bin ${bin} -- "$@"
+        '';
+      };
+
+    pythonForTesting = pkgs:
+      pkgs.python3.withPackages (ps: [
+        ps.pip
+        (
+          ps.buildPythonPackage rec {
+            pname = "clingo";
+            version = "5.5.2";
+            src = ps.fetchPypi {
+              inherit pname version;
+              sha256 = "sha256-ImxCPEUlO/D6GShF3R/EuvCwsfgqjou0uEgP48+Efkc=";
+            };
+            propagatedBuildInputs = [
+              ps.setuptools
+              ps.wheel
+              ps.scikit-build
+              pkgs.cmake
+              pkgs.ninja
+            ];
+          }
+        )
+      ]);
   in
     (inputs.nixCargoIntegration.lib.makeOutputs {
       root = ./.;
@@ -55,8 +78,11 @@
             hyperfine
             nil
             diff-so-fancy
+            python3.pkgs.pylsp-mypy
+            python3.pkgs.python-lsp-server
             inputs.dev.packages.x86_64-linux.mdpls
             (clingoFixed common.pkgs)
+            # (pythonForTesting common.pkgs)
             (bench common.pkgs)
             (runBin common.pkgs "dasp-" "cli" "release")
             (runBin common.pkgs "dasp" "cli" "dev")
@@ -67,6 +93,10 @@
             {
               name = "CLINGO_LIBRARY_PATH";
               value = "${clingoFixed common.pkgs}/lib";
+            }
+            {
+              name = "LD_LIBRARY_PATH";
+              value = "${common.pkgs.stdenv.cc.cc.lib}/lib";
             }
           ];
         };

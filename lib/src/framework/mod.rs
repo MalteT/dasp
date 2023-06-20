@@ -24,6 +24,10 @@ pub enum ParserError {
     UnexpectedEndOfInput {
         expected: Vec<Box<dyn ::std::fmt::Debug>>,
     },
+    #[error("Argument {arg_id:?} is configured as optional but does not exist")]
+    OptionalArgumentNotFound { arg_id: String },
+    #[error("Attack from {from:?} to {to:?} is configured as optional but does not exist")]
+    OptionalAttackNotFound { from: String, to: String },
 }
 
 /// A generic extension.

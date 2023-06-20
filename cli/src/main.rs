@@ -63,7 +63,7 @@ fn run_task_count_extensions<S: ArgumentationFrameworkSemantic>(dynamics: Dynami
         let mut update_iter = ARGS.update_file.lines()?.enumerate();
         while let Some((nr, update)) = update_iter.next()? {
             af.update(&update)?;
-            println!("// Update #{nr}");
+            println!("// Update #{nr} -- {update}");
             println!("{}", af.count_extensions()?);
         }
     }
@@ -81,7 +81,7 @@ fn run_task_enumerate_extensions<S: ArgumentationFrameworkSemantic>(dynamics: Dy
         let mut update_iter = ARGS.update_file.lines()?.enumerate();
         while let Some((nr, update)) = update_iter.next()? {
             af.update(&update)?;
-            println!("// Update #{nr}");
+            println!("// Update #{nr} -- {update}");
             af.enumerate_extensions()?.by_ref().for_each(|ext| {
                 println!("{}", ext.format());
                 Ok(())

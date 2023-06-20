@@ -6,6 +6,8 @@ use super::{expect, ParserError, ParserResult, RawArgument, RawAttack};
 
 #[derive(Debug, PartialEq, Eq, Logos, Clone, Copy)]
 pub enum Token {
+    #[token("?")]
+    Optional,
     #[regex(r"[a-z0-9]+")]
     Text,
     #[token("#")]
@@ -34,7 +36,13 @@ fn parse_attacks(lex: &mut Lexer<Token>) -> ParserResult<Vec<symbols::Attack>> {
                 expect(lex, Token::Whitespace)?;
                 expect(lex, Token::Text)?;
                 let to = lex.slice().to_owned();
-                attacks.push(symbols::Attack(from, to))
+                let optional = if lex.remainder().starts_with('?') {
+                    lex.next();
+                    true
+                } else {
+                    false
+                };
+                attacks.push(symbols::Attack { from, to, optional })
             }
             Some(token) => {
                 break Err(ParserError::UnexpectedToken {
@@ -54,7 +62,16 @@ fn parse_arguments(lex: &mut Lexer<Token>) -> ParserResult<Vec<symbols::Argument
     loop {
         let next = lex.next();
         match next {
-            Some(Token::Text) => args.push(symbols::Argument(lex.slice().to_owned())),
+            Some(Token::Text) => {
+                let id = lex.slice().to_owned();
+                let optional = if lex.remainder().starts_with('?') {
+                    lex.next();
+                    true
+                } else {
+                    false
+                };
+                args.push(symbols::Argument { id, optional })
+            }
             Some(Token::Hash) => break,
             Some(token) => {
                 return Err(ParserError::UnexpectedToken {
@@ -72,13 +89,20 @@ fn parse_arguments(lex: &mut Lexer<Token>) -> ParserResult<Vec<symbols::Argument
 
 impl From<RawArgument> for symbols::Argument {
     fn from(raw: RawArgument) -> Self {
-        Self(raw.id)
+        Self {
+            id: raw.id,
+            optional: false,
+        }
     }
 }
 
 impl From<RawAttack> for symbols::Attack {
     fn from(raw: RawAttack) -> Self {
-        Self(raw.from, raw.to)
+        Self {
+            from: raw.from,
+            to: raw.to,
+            optional: false,
+        }
     }
 }
 
@@ -94,18 +118,18 @@ mod tests {
         let af = parse_file(
             r#"1
 2
-3
+3?
 4
 #
-1 2
+1 2?
 1 3"#,
         )
         .unwrap();
         assert_eq! {
             af,
             (
-                vec![arg!("1"), arg!("2"), arg!("3"), arg!("4")],
-                vec![att!("1", "2"), att!("1", "3")]
+                vec![arg!("1"), arg!("2"), arg!("3" opt), arg!("4")],
+                vec![att!("1", "2" opt), att!("1", "3")]
             )
         }
     }
