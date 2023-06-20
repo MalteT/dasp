@@ -10,27 +10,27 @@ pub enum Token {
     Arg,
     #[token("att")]
     Attack,
-    #[token("opt")]
-    Optional,
-    #[token("(")]
-    LeftParen,
-    #[token(")")]
-    RightParen,
-    #[token(".")]
-    Period,
-    #[token(",")]
-    Comma,
-    #[token("+")]
-    Plus,
-    #[token("-")]
-    Minus,
     #[token(":")]
     Colon,
-    #[regex(r"[a-z0-9]+")]
-    Text,
+    #[token(",")]
+    Comma,
     #[error]
     #[regex(r"[ \r\n]+", logos::skip)]
     Error,
+    #[token("(")]
+    LeftParen,
+    #[token("-")]
+    Minus,
+    #[token("opt")]
+    Optional,
+    #[token(".")]
+    Period,
+    #[token("+")]
+    Plus,
+    #[token(")")]
+    RightParen,
+    #[regex(r"[a-z][a-zA-Z0-9_-]*")]
+    Text,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

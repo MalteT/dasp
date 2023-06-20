@@ -6,19 +6,19 @@ use super::{expect, ParserError, ParserResult};
 
 #[derive(Debug, PartialEq, Eq, Logos, Clone, Copy)]
 pub enum Token {
-    #[regex(r"[a-z0-9]+")]
-    Text,
-    #[regex(" +")]
-    Whitespace,
-    #[token("+")]
-    Plus,
-    #[token("-")]
-    Minus,
     #[token(":")]
     Colon,
     #[error]
     #[regex(r"[\r\n]+", logos::skip)]
     Error,
+    #[token("-")]
+    Minus,
+    #[token("+")]
+    Plus,
+    #[regex(r"[a-z][a-zA-Z0-9_-]*")]
+    Text,
+    #[regex(" +")]
+    Whitespace,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

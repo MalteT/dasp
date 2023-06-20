@@ -6,17 +6,17 @@ use super::{expect, ParserError, ParserResult, RawArgument, RawAttack};
 
 #[derive(Debug, PartialEq, Eq, Logos, Clone, Copy)]
 pub enum Token {
-    #[token("?")]
-    Optional,
-    #[regex(r"[a-z0-9]+")]
-    Text,
-    #[token("#")]
-    Hash,
-    #[regex(" +")]
-    Whitespace,
     #[error]
     #[regex(r"[\r\n]+", logos::skip)]
     Error,
+    #[token("#")]
+    Hash,
+    #[token("?")]
+    Optional,
+    #[regex(r"[a-z][a-zA-Z0-9_-]*")]
+    Text,
+    #[regex(" +")]
+    Whitespace,
 }
 
 pub fn parse_file(input: &str) -> ParserResult<(Vec<symbols::Argument>, Vec<symbols::Attack>)> {

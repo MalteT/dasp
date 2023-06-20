@@ -110,29 +110,29 @@ impl UpdateLine {
         match ARGS.format {
             Format::Apx => match self {
                 Self::AddArg(arg, atts) => {
-                    let mut formatted = format!("+arg({arg})");
+                    let mut formatted = format!("+arg(a{arg})");
                     for (from, to) in atts {
-                        write!(formatted, ":att({from},{to})").unwrap();
+                        write!(formatted, ":att(a{from},a{to})").unwrap();
                     }
                     write!(formatted, ".").unwrap();
                     formatted
                 }
-                Self::DelArg(arg) => format!("-arg({arg})."),
-                Self::AddAtt((from, to)) => format!("+att({from},{to})."),
-                Self::DelAtt((from, to)) => format!("-att({from},{to})."),
+                Self::DelArg(arg) => format!("-arg(a{arg})."),
+                Self::AddAtt((from, to)) => format!("+att(a{from},a{to})."),
+                Self::DelAtt((from, to)) => format!("-att(a{from},a{to})."),
             },
             Format::Tgf => match self {
                 Self::AddArg(arg, atts) => {
-                    let mut formatted = format!("+{arg}");
+                    let mut formatted = format!("+a{arg}");
                     for (from, to) in atts {
-                        write!(formatted, ":{from} {to}").unwrap();
+                        write!(formatted, ":a{from} a{to}").unwrap();
                     }
                     write!(formatted, ".").unwrap();
                     formatted
                 }
-                Self::DelArg(arg) => format!("-{arg}"),
-                Self::AddAtt((from, to)) => format!("+{from} {to}"),
-                Self::DelAtt((from, to)) => format!("-{from} {to}"),
+                Self::DelArg(arg) => format!("-a{arg}"),
+                Self::AddAtt((from, to)) => format!("+a{from} a{to}"),
+                Self::DelAtt((from, to)) => format!("-a{from} a{to}"),
             },
         }
     }
@@ -164,22 +164,22 @@ impl AF {
             Format::Apx => {
                 self.args
                     .iter()
-                    .map(|arg| format!("arg({arg})."))
+                    .map(|arg| format!("arg(a{arg})."))
                     .try_for_each(|line| writeln!(output, "{line}"))?;
                 self.atts
                     .iter()
-                    .map(|(from, to)| format!("att({from},{to})."))
+                    .map(|(from, to)| format!("att(a{from},a{to})."))
                     .try_for_each(|line| writeln!(output, "{line}"))?;
             }
             Format::Tgf => {
                 self.args
                     .iter()
-                    .map(|arg| format!("{arg}"))
+                    .map(|arg| format!("a{arg}"))
                     .try_for_each(|line| writeln!(output, "{line}"))?;
                 writeln!(output, "#")?;
                 self.atts
                     .iter()
-                    .map(|(from, to)| format!("{from} {to}"))
+                    .map(|(from, to)| format!("a{from} a{to}"))
                     .try_for_each(|line| writeln!(output, "{line}"))?;
             }
         }

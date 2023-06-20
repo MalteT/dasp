@@ -10,21 +10,21 @@ pub enum Token {
     Arg,
     #[token("att")]
     Attack,
-    #[token("opt")]
-    Optional,
-    #[token("(")]
-    LeftParen,
-    #[token(")")]
-    RightParen,
-    #[token(".")]
-    Period,
     #[token(",")]
     Comma,
-    #[regex(r"[a-z0-9]+")]
-    Text,
     #[error]
     #[regex(r"[ \r\n]+", logos::skip)]
     Error,
+    #[token("(")]
+    LeftParen,
+    #[token("opt")]
+    Optional,
+    #[token(".")]
+    Period,
+    #[token(")")]
+    RightParen,
+    #[regex(r"[a-z][a-zA-Z0-9_-]*")]
+    Text,
 }
 
 enum ArgOrAttack {
