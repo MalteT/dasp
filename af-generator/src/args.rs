@@ -43,27 +43,27 @@ pub struct Args {
         value_name = "FLOAT",
         default_value_t = 0.05
     )]
-    pub edge_prop: f32,
+    pub edge_prop: f64,
     /// Probability by which attacks from and to every other argument
     /// should be selected when an argument-add update is created.
-    /// If the argument `3` is added, consider every possible new attack and add it with this probability.
-    #[arg(long = "update-edge", value_name = "FLOAT", default_value_t = 0.0025)]
-    pub edge_prop_when_adding_arg: f32,
+    /// If the argument `3` is added, consider every possible (optional) attack and add it with this probability.
+    #[arg(long = "update-edge", value_name = "FLOAT", default_value_t = 0.25)]
+    pub edge_prop_when_adding_arg: f64,
     /// Probability by which an argument is marked as optional. Updates will only change optional arguments and attacks.
     #[arg(long, value_name = "FLOAT", default_value_t = 0.05)]
-    pub arg_optional_prop: f32,
+    pub arg_optional_prop: f64,
     /// Probability by which an attack is marked as optional. Updates will only change optional arguments and attacks.
     #[arg(long, value_name = "FLOAT", default_value_t = 0.05)]
-    pub attack_optional_prop: f32,
+    pub attack_optional_prop: f64,
+    /// Whether to write the intermediate frameworks to PATH-intermediate-NUMBER.EXT. These intermediates will be
+    /// generated after every generated update and reflect the framework after this update.
+    #[arg(long, default_value_t = false)]
+    pub output_intermediates: bool,
 }
 
 impl Args {
     pub fn get_initial_output_path(&self) -> PathBuf {
-        let mut file_name = self
-            .output
-            .file_name()
-            .map(OsStr::to_os_string)
-            .unwrap_or_else(|| OsString::from("af"));
+        let mut file_name = self.output_file_name();
         write!(
             file_name,
             "-initial.{}",
@@ -73,17 +73,31 @@ impl Args {
         self.output.with_file_name(file_name)
     }
     pub fn get_update_output_path(&self) -> PathBuf {
-        let mut file_name = self
-            .output
-            .file_name()
-            .map(OsStr::to_os_string)
-            .unwrap_or_else(|| OsString::from("af"));
+        let mut file_name = self.output_file_name();
         write!(
             file_name,
             "-updates.{}",
             self.format.as_update_file_ending()
         )
-        .expect("Creating initial file path");
+        .expect("Creating update file path");
         self.output.with_file_name(file_name)
+    }
+    pub fn get_intermediate_output_path(&self, nr: usize) -> PathBuf {
+        let mut file_name = self.output_file_name();
+        write!(
+            file_name,
+            "-intermediate-{}.{}",
+            nr,
+            self.format.as_initial_file_ending()
+        )
+        .expect("Creating intermediate file path");
+        self.output.with_file_name(file_name)
+    }
+
+    fn output_file_name(&self) -> OsString {
+        self.output
+            .file_name()
+            .map(OsStr::to_os_string)
+            .unwrap_or_else(|| OsString::from("af"))
     }
 }

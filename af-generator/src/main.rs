@@ -92,6 +92,7 @@ impl UpdateLine {
                 let attacks: Vec<_> = dead_attacks
                     .into_iter()
                     .filter(|(attack, _)| attack.contains(arg))
+                    .filter(|_| rng.gen_bool(ARGS.edge_prop_when_adding_arg))
                     .map(|(attack, _)| *attack)
                     .collect();
                 Some(UpdateLine::EnableArgument(*arg, attacks))
@@ -186,18 +187,19 @@ impl AF {
             .collect();
         Self { args, atts }
     }
-    /// Write the initial file
-    fn write_initial_file(&self) -> ::std::io::Result<()> {
-        let initial_file_path = ARGS.get_initial_output_path();
-        let mut output = BufWriter::new(File::create(initial_file_path)?);
-
+    fn write_framework_to_file(
+        &self,
+        output: &mut BufWriter<File>,
+        alive_only: bool,
+    ) -> ::std::io::Result<()> {
         match ARGS.format {
             Format::Apx => {
                 self.args
                     .iter()
+                    .filter(|(_, state)| !alive_only || *state == State::Alive)
                     .map(|(arg, _)| {
                         let arg_string = format!("arg({})", arg.name());
-                        if arg.optional {
+                        if !alive_only && arg.optional {
                             format!("{arg_string}. opt({arg_string}).")
                         } else {
                             format!("{arg_string}.")
@@ -206,9 +208,10 @@ impl AF {
                     .try_for_each(|line| writeln!(output, "{line}"))?;
                 self.atts
                     .iter()
+                    .filter(|(_, state)| !alive_only || *state == State::Alive)
                     .map(|(attack, _)| {
                         let attack_string = format!("att({}, {})", attack.from(), attack.to());
-                        if attack.optional {
+                        if !alive_only && attack.optional {
                             format!("{attack_string}. opt({attack_string}).")
                         } else {
                             format!("{attack_string}.")
@@ -219,19 +222,29 @@ impl AF {
             Format::Tgf => {
                 self.args
                     .iter()
+                    .filter(|(_, state)| !alive_only || *state == State::Alive)
                     .map(|(arg, _)| {
-                        format!("{}{}", arg.name(), if arg.optional { "?" } else { "" })
+                        format!(
+                            "{}{}",
+                            arg.name(),
+                            if !alive_only && arg.optional { "?" } else { "" }
+                        )
                     })
                     .try_for_each(|line| writeln!(output, "{line}"))?;
                 writeln!(output, "#")?;
                 self.atts
                     .iter()
+                    .filter(|(_, state)| !alive_only || *state == State::Alive)
                     .map(|(attack, _)| {
                         format!(
                             "{} {}{}",
                             attack.from(),
                             attack.to(),
-                            if attack.optional { "?" } else { "" }
+                            if !alive_only && attack.optional {
+                                "?"
+                            } else {
+                                ""
+                            }
                         )
                     })
                     .try_for_each(|line| writeln!(output, "{line}"))?;
@@ -239,14 +252,36 @@ impl AF {
         }
         Ok(())
     }
+    /// Write the initial file
+    fn write_initial_file(&self) -> ::std::io::Result<()> {
+        let initial_file_path = ARGS.get_initial_output_path();
+        let mut output = BufWriter::new(File::create(initial_file_path)?);
+        self.write_framework_to_file(&mut output, false)
+    }
+    fn write_intermediate_file(&self, nr: usize) -> ::std::io::Result<()> {
+        let initial_file_path = ARGS.get_intermediate_output_path(nr);
+        let mut output = BufWriter::new(File::create(initial_file_path)?);
+        self.write_framework_to_file(&mut output, true)
+    }
     /// Generate and apply updates
     fn generate_apply_updates(&mut self, rng: &mut impl Rng) -> Vec<UpdateLine> {
         let mut updates = vec![];
-        for _ in 0..ARGS.nr_of_updates {
+        // Initial intermediate, without `opt`s
+        if ARGS.output_intermediates {
+            if let Err(why) = self.write_intermediate_file(0) {
+                log::warn!("Failed to write intermediate number 0: {why}");
+            }
+        }
+        for update_nr in 1..=ARGS.nr_of_updates {
             let update = UpdateLine::generate(rng, &self.args, &self.atts);
             match update {
                 Some(update) => {
                     self.apply_update(&update);
+                    if ARGS.output_intermediates {
+                        if let Err(why) = self.write_intermediate_file(update_nr) {
+                            log::warn!("Failed to write intermediate number {update_nr}: {why}");
+                        }
+                    }
                     updates.push(update);
                 }
                 None => {
@@ -297,7 +332,7 @@ impl AF {
 
 fn generate_arguments<R: Rng>(rng: &'_ mut R) -> impl Iterator<Item = Argument> + '_ {
     (0..ARGS.arg_count).map(|id| {
-        let optional = rng.gen_bool(ARGS.arg_optional_prop as f64);
+        let optional = rng.gen_bool(ARGS.arg_optional_prop);
         Argument::new(id, optional)
     })
 }
@@ -306,8 +341,8 @@ fn generate_attacks<R: Rng>(rng: &'_ mut R) -> impl Iterator<Item = Attack> + '_
     (0..ARGS.arg_count)
         .flat_map(|from| (0..ARGS.arg_count).map(move |to| (from, to)))
         .filter_map(|(from, to)| {
-            if rng.gen_bool(ARGS.edge_prop as f64) {
-                let optional = rng.gen_bool(ARGS.attack_optional_prop as f64);
+            if rng.gen_bool(ARGS.edge_prop) {
+                let optional = rng.gen_bool(ARGS.attack_optional_prop);
                 Some(Attack::from_raw(from, to, optional))
             } else {
                 None
