@@ -120,23 +120,23 @@ mod tests {
 
     #[test]
     fn simple_patches() {
-        let patches = parse_line("+1 3").unwrap();
-        assert_eq!(patches, vec![Patch::EnableAttack(att!("1", "3"))]);
+        let patches = parse_line("+a1 a3").unwrap();
+        assert_eq!(patches, vec![Patch::EnableAttack(att!("a1", "a3"))]);
 
-        let patches = parse_line("-2 1").unwrap();
-        assert_eq!(patches, vec![Patch::DisableAttack(att!("2", "1"))]);
+        let patches = parse_line("-a2 a1").unwrap();
+        assert_eq!(patches, vec![Patch::DisableAttack(att!("a2", "a1"))]);
 
-        let patches = parse_line("+4:4 1:2 4").unwrap();
+        let patches = parse_line("+a4:a4 a1:a2 a4").unwrap();
         assert_eq!(
             patches,
             vec![
-                Patch::EnableArgument(arg!("4")),
-                Patch::EnableAttack(att!("4", "1")),
-                Patch::EnableAttack(att!("2", "4"))
+                Patch::EnableArgument(arg!("a4")),
+                Patch::EnableAttack(att!("a4", "a1")),
+                Patch::EnableAttack(att!("a2", "a4"))
             ]
         );
 
-        let patches = parse_line("-3").unwrap();
-        assert_eq!(patches, vec![Patch::DisableArgument(arg!("3"))]);
+        let patches = parse_line("-a3").unwrap();
+        assert_eq!(patches, vec![Patch::DisableArgument(arg!("a3"))]);
     }
 }

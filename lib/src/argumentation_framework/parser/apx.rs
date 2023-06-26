@@ -157,21 +157,21 @@ mod tests {
 
         let af = parse_file(
             r#"
-                arg(1).
-                arg(2).
-                arg(3).
-                arg(4).
-                att(2, 3).
-                att (3,1) .
-                opt(arg(2)).
-                opt(att(2,3)) .
+                arg(a1).
+                arg(a2).
+                arg(a3).
+                arg(a4).
+                att(a2, a3).
+                att (a3,a1) .
+                opt(arg(a2)).
+                opt(att(a2,a3)) .
             "#,
         )
         .unwrap();
         assert_eq! {
             af,
-            ( vec![arg!("1"), arg!("2" opt), arg!("3"), arg!("4")],
-              vec![att!("2", "3" opt), att!("3", "1")],
+            ( vec![arg!("a1"), arg!("a2" opt), arg!("a3"), arg!("a4")],
+              vec![att!("a2", "a3" opt), att!("a3", "a1")],
             )
         }
     }

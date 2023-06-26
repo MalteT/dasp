@@ -116,20 +116,20 @@ mod tests {
     #[test]
     fn simple_files() {
         let af = parse_file(
-            r#"1
-2
-3?
-4
+            r#"a1
+a2
+a3?
+a4
 #
-1 2?
-1 3"#,
+a1 a2?
+a1 a3"#,
         )
         .unwrap();
         assert_eq! {
             af,
             (
-                vec![arg!("1"), arg!("2"), arg!("3" opt), arg!("4")],
-                vec![att!("1", "2" opt), att!("1", "3")]
+                vec![arg!("a1"), arg!("a2"), arg!("a3" opt), arg!("a4")],
+                vec![att!("a1", "a2" opt), att!("a1", "a3")]
             )
         }
     }

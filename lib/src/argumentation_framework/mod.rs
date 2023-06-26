@@ -48,9 +48,9 @@ mod tests;
 ///
 /// let mut af = ArgumentationFramework::<semantics::Admissible>::new(
 ///     r#"
-///         arg(1).
-///         arg(2).
-///         att(1,2).
+///         arg(a1).
+///         arg(a2).
+///         att(a1,a2).
 ///     "#,
 /// )
 /// .expect("Initializing AF");

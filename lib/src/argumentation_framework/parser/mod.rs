@@ -207,12 +207,12 @@ mod tests {
         assert_eq!(af, (vec![arg!("a1"), arg!("b3")], vec![],));
 
         let af = parse_apx_tgf(
-            r#"1
-2
+            r#"a1
+a2
 #
-2 1"#,
+a2 a1"#,
         )
         .unwrap();
-        assert_eq!(af, (vec![arg!("1"), arg!("2")], vec![att!("2", "1")],));
+        assert_eq!(af, (vec![arg!("a1"), arg!("a2")], vec![att!("a2", "a1")],));
     }
 }
