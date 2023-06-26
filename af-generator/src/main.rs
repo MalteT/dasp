@@ -1,29 +1,18 @@
-use std::{
-    ffi::{OsStr, OsString},
-    fmt::Write,
-    fs::File,
-    io::BufWriter,
-    io::Write as IoWrite,
-    path::PathBuf,
-};
+//! Tool to generate random argumentation frameworks
+use std::{fmt::Write, fs::File, io::BufWriter, io::Write as IoWrite};
 
-use clap::{Parser, ValueEnum};
-use lazy_static::lazy_static;
+use clap::ValueEnum;
 use rand::{rngs::SmallRng, seq::SliceRandom, Rng, SeedableRng};
+use types::{Argument, ArgumentWithState, Attack, AttackWithState, State};
 
-/// Arguments are simple numbers
-type Arg = usize;
-/// Attacks are given by their origin and target
-type Att = (usize, usize);
+mod args;
+mod types;
 
-lazy_static! {
-    /// Global command line arguments
-    static ref ARGS: Args = Args::parse();
-}
+use args::ARGS;
 
 /// Possible output formats
 #[derive(Debug, Clone, Copy, Default, ValueEnum)]
-enum Format {
+pub enum Format {
     Apx,
     #[default]
     Tgf,
@@ -46,61 +35,81 @@ impl Format {
 
 /// Possible update lines
 enum UpdateLine {
-    AddArg(Arg, Vec<Att>),
-    DelArg(Arg),
-    AddAtt(Att),
-    DelAtt(Att),
+    EnableArgument(Argument, Vec<Attack>),
+    DisableArgument(Argument),
+    EnableAttack(Attack),
+    DisableAttack(Attack),
 }
 
 impl UpdateLine {
     /// Generate a single new update line.
-    pub fn generate(rng: &mut impl Rng, args: &[Arg], atts: &[Att]) -> Self {
+    pub fn generate(
+        rng: &mut impl Rng,
+        args: &[ArgumentWithState],
+        attacks: &[AttackWithState],
+    ) -> Option<Self> {
         enum Options {
-            AddArg,
-            DelArg,
-            AddAtt,
-            DelAtt,
+            EnableArgument,
+            DisableArgument,
+            EnableAttack,
+            DisableAttack,
         }
-        // We can always add arguments!
-        let mut valid_options = vec![Options::AddArg];
-        if !args.is_empty() {
-            // Can only delete arguments or add attacks if any arguments exist
-            valid_options.push(Options::DelArg);
-            valid_options.push(Options::AddAtt);
+        let mut valid_options: Vec<Options> = vec![];
+        let dead_args = args
+            .iter()
+            .filter(|(_, state)| *state == State::Dead)
+            .collect::<Vec<_>>();
+        let dead_attacks = attacks
+            .iter()
+            .filter(|(_, state)| *state == State::Dead)
+            .collect::<Vec<_>>();
+        let alive_but_optional_args = args
+            .iter()
+            .filter(|(arg, state)| arg.optional && *state == State::Alive)
+            .collect::<Vec<_>>();
+        let alive_but_optional_attacks = attacks
+            .iter()
+            .filter(|(attack, state)| attack.optional && *state == State::Alive)
+            .collect::<Vec<_>>();
+        if !dead_args.is_empty() {
+            valid_options.push(Options::EnableArgument);
         }
-        if !atts.is_empty() {
-            // Can only delete attacks if there are any
-            valid_options.push(Options::DelAtt);
+        if !dead_attacks.is_empty() {
+            valid_options.push(Options::EnableAttack);
         }
-        // The following `unwrap`s are all infallible
-        let selected_option = valid_options.choose(rng).unwrap();
+        if !alive_but_optional_args.is_empty() {
+            valid_options.push(Options::DisableArgument)
+        }
+        if !alive_but_optional_attacks.is_empty() {
+            valid_options.push(Options::DisableAttack)
+        }
+        // There may not be a valid option to apply..
+        let selected_option = valid_options.choose(rng)?;
         match selected_option {
-            Options::AddArg => {
-                let max = args.iter().max().copied().unwrap_or_default();
-                let new = max + 1;
-                let mut atts: Vec<Att> = args
-                    .iter()
-                    .flat_map(|&other| [(new, other), (other, new)])
-                    .filter(|_| rng.gen::<f32>() < ARGS.edge_prop_when_adding_arg)
+            Options::EnableArgument => {
+                // We know that there are dead_arguments by the above logic
+                let (arg, _) = dead_args.choose(rng).unwrap();
+                let attacks: Vec<_> = dead_attacks
+                    .into_iter()
+                    .filter(|(attack, _)| attack.contains(arg))
+                    .map(|(attack, _)| *attack)
                     .collect();
-                if rng.gen::<f32>() < ARGS.edge_prop_when_adding_arg {
-                    // Yes, attack yourself!
-                    atts.push((new, new));
-                }
-                UpdateLine::AddArg(new, atts)
+                Some(UpdateLine::EnableArgument(*arg, attacks))
             }
-            Options::AddAtt => {
-                let from = args.choose(rng).unwrap();
-                let to = args.choose(rng).unwrap();
-                UpdateLine::AddAtt((*from, *to))
+            Options::EnableAttack => {
+                // We know that there are dead_attacks by the above logic
+                let (attack, _) = dead_attacks.choose(rng).unwrap();
+                Some(UpdateLine::EnableAttack(*attack))
             }
-            Options::DelArg => {
-                let arg = args.choose(rng).unwrap();
-                UpdateLine::DelArg(*arg)
+            Options::DisableArgument => {
+                // We know that there are alive_but_optional_args by the above logic
+                let (arg, _) = alive_but_optional_args.choose(rng).unwrap();
+                Some(UpdateLine::DisableArgument(*arg))
             }
-            Options::DelAtt => {
-                let att = atts.choose(rng).unwrap();
-                UpdateLine::DelAtt(*att)
+            Options::DisableAttack => {
+                // We know that there are alive_but_optional_attacks by the above logic
+                let (attack, _) = alive_but_optional_attacks.choose(rng).unwrap();
+                Some(UpdateLine::DisableAttack(*attack))
             }
         }
     }
@@ -109,30 +118,30 @@ impl UpdateLine {
     fn format(&self) -> String {
         match ARGS.format {
             Format::Apx => match self {
-                Self::AddArg(arg, atts) => {
-                    let mut formatted = format!("+arg(a{arg})");
-                    for (from, to) in atts {
-                        write!(formatted, ":att(a{from},a{to})").unwrap();
+                Self::EnableArgument(arg, atts) => {
+                    let mut formatted = format!("+arg({})", arg.name());
+                    for attack in atts {
+                        write!(formatted, ":att({}, {})", attack.from(), attack.to()).unwrap();
                     }
                     write!(formatted, ".").unwrap();
                     formatted
                 }
-                Self::DelArg(arg) => format!("-arg(a{arg})."),
-                Self::AddAtt((from, to)) => format!("+att(a{from},a{to})."),
-                Self::DelAtt((from, to)) => format!("-att(a{from},a{to})."),
+                Self::DisableArgument(arg) => format!("-arg({}).", arg.name()),
+                Self::EnableAttack(attack) => format!("+att({}, {}).", attack.from(), attack.to()),
+                Self::DisableAttack(attack) => format!("-att({}, {}).", attack.from(), attack.to()),
             },
             Format::Tgf => match self {
-                Self::AddArg(arg, atts) => {
-                    let mut formatted = format!("+a{arg}");
-                    for (from, to) in atts {
-                        write!(formatted, ":a{from} a{to}").unwrap();
+                Self::EnableArgument(arg, atts) => {
+                    let mut formatted = format!("+{}", arg.name());
+                    for attack in atts {
+                        write!(formatted, ":{} {}", attack.from(), attack.to()).unwrap();
                     }
                     write!(formatted, ".").unwrap();
                     formatted
                 }
-                Self::DelArg(arg) => format!("-a{arg}"),
-                Self::AddAtt((from, to)) => format!("+a{from} a{to}"),
-                Self::DelAtt((from, to)) => format!("-a{from} a{to}"),
+                Self::DisableArgument(arg) => format!("-{}", arg.name()),
+                Self::EnableAttack(attack) => format!("+{} {}", attack.from(), attack.to()),
+                Self::DisableAttack(attack) => format!("-{} {}", attack.from(), attack.to()),
             },
         }
     }
@@ -142,17 +151,39 @@ impl UpdateLine {
 #[derive(Debug, Clone)]
 struct AF {
     /// Arguments
-    args: Vec<Arg>,
+    args: Vec<ArgumentWithState>,
     /// Attacks
-    atts: Vec<Att>,
+    atts: Vec<AttackWithState>,
 }
 
 impl AF {
     /// Generate a new argumentation framework
     fn generate(rng: &mut impl Rng) -> Self {
         // Generate af arguments and attacks
-        let args: Vec<usize> = generate_arguments().collect();
-        let atts: Vec<(usize, usize)> = generate_attacks(rng).collect();
+        let args = generate_arguments(rng)
+            .map(|arg| {
+                (
+                    arg,
+                    if arg.optional {
+                        State::Dead
+                    } else {
+                        State::Alive
+                    },
+                )
+            })
+            .collect();
+        let atts = generate_attacks(rng)
+            .map(|attack| {
+                (
+                    attack,
+                    if attack.optional {
+                        State::Dead
+                    } else {
+                        State::Alive
+                    },
+                )
+            })
+            .collect();
         Self { args, atts }
     }
     /// Write the initial file
@@ -164,22 +195,45 @@ impl AF {
             Format::Apx => {
                 self.args
                     .iter()
-                    .map(|arg| format!("arg(a{arg})."))
+                    .map(|(arg, _)| {
+                        let arg_string = format!("arg({})", arg.name());
+                        if arg.optional {
+                            format!("{arg_string}. opt({arg_string}).")
+                        } else {
+                            format!("{arg_string}.")
+                        }
+                    })
                     .try_for_each(|line| writeln!(output, "{line}"))?;
                 self.atts
                     .iter()
-                    .map(|(from, to)| format!("att(a{from},a{to})."))
+                    .map(|(attack, _)| {
+                        let attack_string = format!("att({}, {})", attack.from(), attack.to());
+                        if attack.optional {
+                            format!("{attack_string}. opt({attack_string}).")
+                        } else {
+                            format!("{attack_string}.")
+                        }
+                    })
                     .try_for_each(|line| writeln!(output, "{line}"))?;
             }
             Format::Tgf => {
                 self.args
                     .iter()
-                    .map(|arg| format!("a{arg}"))
+                    .map(|(arg, _)| {
+                        format!("{}{}", arg.name(), if arg.optional { "?" } else { "" })
+                    })
                     .try_for_each(|line| writeln!(output, "{line}"))?;
                 writeln!(output, "#")?;
                 self.atts
                     .iter()
-                    .map(|(from, to)| format!("a{from} a{to}"))
+                    .map(|(attack, _)| {
+                        format!(
+                            "{} {}{}",
+                            attack.from(),
+                            attack.to(),
+                            if attack.optional { "?" } else { "" }
+                        )
+                    })
                     .try_for_each(|line| writeln!(output, "{line}"))?;
             }
         }
@@ -190,101 +244,75 @@ impl AF {
         let mut updates = vec![];
         for _ in 0..ARGS.nr_of_updates {
             let update = UpdateLine::generate(rng, &self.args, &self.atts);
-            self.apply_update(&update);
-            updates.push(update);
+            match update {
+                Some(update) => {
+                    self.apply_update(&update);
+                    updates.push(update);
+                }
+                None => {
+                    log::error!("Could not find any update to generate. No optional arguments or attacks exist")
+                }
+            }
         }
         updates
     }
     /// Apply a single update line
     fn apply_update(&mut self, update: &UpdateLine) {
         match update {
-            UpdateLine::AddArg(arg, atts) => {
-                self.args.push(*arg);
-                self.atts.extend(atts)
+            UpdateLine::EnableArgument(arg, attacks) => {
+                self.args
+                    .iter_mut()
+                    .find(|(argument, _)| argument == arg)
+                    .expect("BUG: Could not find argument to enable")
+                    .1 = State::Alive;
+                self.atts
+                    .iter_mut()
+                    .filter(|(attack, _)| attacks.contains(attack))
+                    .for_each(|(_, state)| *state = State::Alive);
             }
-            UpdateLine::DelArg(arg) => self.args.retain(|a| a != arg),
-            UpdateLine::AddAtt(att) => self.atts.push(*att),
-            UpdateLine::DelAtt(att) => self.atts.retain(|a| a != att),
+            UpdateLine::DisableArgument(arg) => {
+                self.args
+                    .iter_mut()
+                    .find(|(argument, _)| argument == arg)
+                    .expect("BUG: Could not find argument to disable")
+                    .1 = State::Dead
+            }
+            UpdateLine::EnableAttack(att) => {
+                self.atts
+                    .iter_mut()
+                    .find(|(attack, _)| att == attack)
+                    .expect("BUG: Could not find attack to enable")
+                    .1 = State::Alive
+            }
+            UpdateLine::DisableAttack(att) => {
+                self.atts
+                    .iter_mut()
+                    .find(|(attack, _)| att == attack)
+                    .expect("BUG: Could not find attack to disable")
+                    .1 = State::Dead
+            }
         }
     }
 }
 
-/// Generate AFs and optional updates for the dynamic context.
-#[derive(Debug, clap::Parser)]
-struct Args {
-    /// Size of the initial AF.
-    #[arg(
-        short = 'n',
-        long = "size",
-        default_value_t = 1_000,
-        value_name = "NUM"
-    )]
-    arg_count: usize,
-    /// Number of updates to generate.
-    #[arg(short = 'u', long = "updates", default_value_t = 0, value_name = "NUM")]
-    nr_of_updates: usize,
-    /// Output path to write to.
-    /// The main file will be written to PATH-initial.EXT.
-    /// The update file will be written to PATH-updates.EXTm.
-    #[arg(short, long, value_name = "PATH")]
-    output: PathBuf,
-    /// Format for written files.
-    #[arg(short, long, value_name = "EXT")]
-    format: Format,
-    /// Edge propability
-    #[arg(
-        short = 'p',
-        long = "edge",
-        value_name = "FLOAT",
-        default_value_t = 0.05
-    )]
-    edge_prop: f32,
-    /// Probability by which attacks from and to every other argument
-    /// should be selected when an argument-add update is created.
-    /// If the argument `3` is added, consider every possible new attack and add it with this probability.
-    #[arg(long = "update-edge", value_name = "FLOAT", default_value_t = 0.0025)]
-    edge_prop_when_adding_arg: f32,
+fn generate_arguments<R: Rng>(rng: &'_ mut R) -> impl Iterator<Item = Argument> + '_ {
+    (0..ARGS.arg_count).map(|id| {
+        let optional = rng.gen_bool(ARGS.arg_optional_prop as f64);
+        Argument::new(id, optional)
+    })
 }
 
-impl Args {
-    fn get_initial_output_path(&self) -> PathBuf {
-        let mut file_name = self
-            .output
-            .file_name()
-            .map(OsStr::to_os_string)
-            .unwrap_or_else(|| OsString::from("af"));
-        write!(
-            file_name,
-            "-initial.{}",
-            self.format.as_initial_file_ending()
-        )
-        .expect("Creating initial file path");
-        self.output.with_file_name(file_name)
-    }
-    fn get_update_output_path(&self) -> PathBuf {
-        let mut file_name = self
-            .output
-            .file_name()
-            .map(OsStr::to_os_string)
-            .unwrap_or_else(|| OsString::from("af"));
-        write!(
-            file_name,
-            "-updates.{}",
-            self.format.as_update_file_ending()
-        )
-        .expect("Creating initial file path");
-        self.output.with_file_name(file_name)
-    }
-}
-
-fn generate_arguments() -> impl Iterator<Item = usize> {
-    0..ARGS.arg_count
-}
-
-fn generate_attacks<R: Rng>(rng: &mut R) -> impl Iterator<Item = (usize, usize)> + '_ {
+fn generate_attacks<R: Rng>(rng: &'_ mut R) -> impl Iterator<Item = Attack> + '_ {
     (0..ARGS.arg_count)
         .flat_map(|from| (0..ARGS.arg_count).map(move |to| (from, to)))
-        .filter(|_| rng.gen::<f32>() < ARGS.edge_prop)
+        .filter_map(|(from, to)| {
+            if rng.gen_bool(ARGS.edge_prop as f64) {
+                let optional = rng.gen_bool(ARGS.attack_optional_prop as f64);
+                Some(Attack::from_raw(from, to, optional))
+            } else {
+                None
+            }
+        })
 }
 
 fn write_update_file(updates: &[UpdateLine]) -> ::std::io::Result<()> {
